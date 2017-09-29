@@ -1,0 +1,207 @@
+---
+output: 
+  pdf_document:
+    template: randomization_template.tex
+fontsize: 16pt
+params:
+   rid: "R002"
+---
+
+---
+rid: `r params$rid`
+---
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(huxtable)
+library(purrr)
+```
+```{r gather_data, echo = FALSE, message=FALSE, warning=FALSE}
+# id <- "R001"
+id <- params$rid
+rtdt <- read.csv("rtdt_ids_2017-09-18.csv")
+rtdt_id <- rtdt %>%
+  filter_(~ randomization_id == id)
+
+supra <- read.csv("supra_ids_2017-09-18.csv")
+supra_id <- supra %>%
+  filter_(~ randomization_id == id)
+```
+
+```{r spread_data, echo=FALSE}
+# spread() breaks the ordering of grouped variables in the dataset
+rtdt_taste_order <- rtdt_id %>%
+  group_by_(~time) %>%
+  filter_(~level == 1, ~cup_order == 1) %>%
+  mutate_(time_assay =~ paste(time, assay_taste)) %>% ungroup() %>%
+  select_(~time_assay) 
+
+rtdt_spread <- rtdt_id %>% 
+  select_(~time, ~assay_taste, ~cup_order, ~conc, ~cup_id, ~taste_position) %>%
+  group_by_(~time, ~assay_taste, ~conc) %>%
+  mutate_(
+    cup_order =~ LETTERS[cup_order],
+    cup_id =~ as.character(round(cup_id, 0))) %>% 
+  tidyr::gather(variable, value, -conc, -time, -assay_taste, -cup_order) %>%
+  tidyr::unite(temp, variable, cup_order) %>%
+  tidyr::spread(key = temp, value = value) %>%
+  mutate_(time_assay =~ paste(time, assay_taste)) %>%
+  right_join(rtdt_taste_order, by = "time_assay")
+
+supra_taste_order <- supra_id %>%
+  group_by_(~time) %>%
+  filter_(~conc == 0) %>%
+  mutate_(time_assay =~ paste(time, assay_taste)) %>% ungroup() %>%
+  select_(~time_assay) 
+
+supra_spread <- supra_id %>%
+  select_(~time, ~assay_taste, ~cup_order, ~conc, ~cup_id)  %>%
+  group_by_(~time, ~assay_taste, ~conc) %>%
+  mutate_(
+    cup_order =~ LETTERS[cup_order],
+    cup_id =~ as.character(round(cup_id, 0)),
+    conc_id =~ paste0(cup_id, "  (", conc, ")")) %>% 
+  tidyr::gather(variable, value, -time, -assay_taste, -cup_order, factor_key = TRUE) %>%
+  tidyr::unite(temp, variable, cup_order) %>%
+  tidyr::spread(key = temp, value = value) %>%
+  mutate_(time_assay =~ paste(time, assay_taste)) %>%
+  right_join(supra_taste_order, by = "time_assay")
+```
+
+```{r table_functions, echo = FALSE}
+make_rtdt_table <- function(dt, taste){
+  ids  <- dt %>% select_(~conc, ~contains("cup_id"))
+  pos  <- dt %>% select_(~conc, ~contains("taste_position"))
+  
+  highlights <- t(t(where(pos[, 2:4] == 1)) + c(0, 1))
+  huxt <- as_hux(ids) 
+  colnames(huxt) <- c("Concentration", LETTERS[1:3])
+  number_format(huxt)[, 2:4] <- 0
+  number_format(huxt)[, 1]   <- 1  
+  huxt <- huxt %>% 
+    set_background_color(highlights, 'red') %>%
+    add_colnames() %>%
+    set_top_padding(8) %>%
+    set_bottom_padding(8) 
+  
+  bottom_border(huxt)[1,] <- 1
+  align(huxt)[ , 2:4] <- 'center'
+  caption(huxt) <- toupper(taste)
+  caption_pos(huxt) <-  'topleft'
+  huxt
+}
+
+make_supra_table <- function(dt){
+  ids  <- dt %>% select_(~assay_taste, ~contains("conc_id")) %>%
+    mutate_(assay_taste =~ toupper(assay_taste))
+
+  huxt <- as_hux(ids) 
+  colnames(huxt) <- c("Taste", LETTERS[1:4])
+  number_format(huxt)[, 2:5] <- 0
+  number_format(huxt)[, 1]   <- 1  
+  huxt <- huxt %>% 
+    add_colnames() %>%
+    set_top_padding(8) %>%
+    set_bottom_padding(8) %>%
+    set_position("left")
+  
+  bottom_border(huxt)[1,] <- 1
+  caption_pos(huxt) <- "topcenter"
+  align(huxt)[ , 2:5] <- 'center'
+  huxt
+}
+```
+
+```{r, echo = FALSE, message=FALSE, results='asis'}
+rtdt_tables <- rtdt_spread %>%
+  group_by(time, assay_taste) %>%
+  tidyr::nest() %>%
+  mutate_(table =~ purrr::map2(.x = .$data, .y = .$assay_taste, .f = make_rtdt_table))
+
+supra_tables <- supra_spread %>% group_by(time) %>%
+  tidyr::nest() %>%
+  mutate_(table =~ purrr::map(.x = .$data, .f = make_supra_table))
+```
+
+
+\chead{Time 1: Baseline}
+\rhead{RT/DT}
+```{r, echo = FALSE}
+rtdt_tables$table[[1]]
+```
+
+```{r, echo = FALSE}
+rtdt_tables$table[[2]]
+```
+
+\newpage
+
+\rhead{Supra-Threshold}
+
+```{r, echo = FALSE}
+supra_tables$table[[1]]
+```
+
+\newpage
+
+
+\chead{Time 2: Day 5}
+\rhead{RT/DT}
+```{r, echo = FALSE}
+rtdt_tables$table[[3]]
+```
+
+```{r, echo = FALSE}
+rtdt_tables$table[[4]]
+```
+
+\newpage
+
+\rhead{Supra-Threshold}
+
+```{r, echo = FALSE}
+supra_tables$table[[2]]
+```
+
+\newpage
+
+\chead{Time 3: Final Fast}
+\rhead{RT/DT}
+```{r, echo = FALSE}
+rtdt_tables$table[[5]]
+```
+
+```{r, echo = FALSE}
+rtdt_tables$table[[6]]
+```
+
+\newpage
+
+\rhead{Supra-Threshold}
+
+```{r, echo = FALSE}
+supra_tables$table[[3]]
+```
+
+\newpage
+
+\chead{Time 4: Refeed}
+\rhead{RT/DT}
+```{r, echo = FALSE}
+rtdt_tables$table[[7]]
+```
+
+```{r, echo = FALSE}
+rtdt_tables$table[[8]]
+```
+
+\newpage
+
+\rhead{Supra-Threshold}
+
+```{r, echo = FALSE}
+supra_tables$table[[4]]
+```
+
+\newpage

@@ -1,0 +1,314 @@
+---
+title:  "Taste Adaptation during fasting sample size study"
+output: word_document
+bibliography: sample_size.bib
+---
+
+# Goals
+
+1. To understand how sample size may affect the precision of estimating the average effects of fasting on suprathreshold intensity taste curves for three tastes through a simulation study. Six scenarios of small, moderate, and large (defined below) effect sizes will be considered for the three tastes: (small, none, none), (small, small, none), (small, small, small), (moderate, none, none), (moderate, moderate, none), (large, none, none).
+2. To justify a sample size for a pilot study of taste adaptations during fasting based on the results of the simulation study and a qualitative assessment of potential loss to follow up during fasting.
+
+The sample size study targets the primary aim of this pilot study with a goal of precise estimation instead of power. This approach for justifying pilot study sample size is recommended when little is known about the parameter(s) of interest over a hypothesis testing approach [@hertzog2008; @moore2011; @lee2014].
+
+# Simulation study
+
+## Notation
+Let $Y_{itcj}$ be the gLMS intensity for subject $i = 1, \dots, n$ for taste $t$ and concentration $c$ at timepoint $j = 1, 2$. Let $\mathbf{Y}_{it}$ be the vector of a subject' intensities for taste $t$. Let $t = 1, 2, 3$ represent sweet, salty and fatty tastes respectively, and $c = 1, 2, 3$ be the weak, medium, and strong concentrations.
+
+## Data generation
+
+For the three tastes considered in our study, we suppose the following multivariate Normal data generating model:
+
+\[
+\label{eq:datagen}
+\begin{pmatrix}
+\mathbf{Y}_1 \\
+\mathbf{Y}_2 \\
+\mathbf{Y}_3 
+\end{pmatrix}
+= \begin{pmatrix}
+\beta_{10} + \beta_{11} x + \beta_{21} log_{10}(c_1) + d_i + b_{it} + e_{itcj} \\
+\beta_{20} + \beta_{12} x + \beta_{22} log_{10}(c_2) + d_i + b_{it} + e_{itcj} \\
+\beta_{30} + \beta_{13} x + \beta_{23} log_{10}(c_3) + d_i + b_{it} + e_{itcj} \\
+\end{pmatrix}
+\]
+
+where $x$ is an indicator of timepoint (0 = baseline, 1 = after 5 days of water-only fasting) and $c_t$ is the concentration for taste $t$. $d_i$ induces correlation between the three tastes. In the simulations, we suppose the correlations between each of the tastes are equivalent, so that $d_i \sim N(0, \sigma_d^2 \Sigma_d)$, where $\Sigma_d$ is a $18 \times 18$ symmetric correlation matrix with a single correlation parameter, $\rho_d$. In the simulations, we let $\rho_d = 0$ and $\sigma_d^2 = 5$.
+
+$b_{it}$ is a random effect that allows for different correlations within a taste and time point and across time point. That is, $b_{it}$ is a random vector with a Normal distrubtion of mean $0$ and $6 \times 6$ covariance matrix with the following variance components:
+
+\[
+\sigma_b^2 \begin{pmatrix}
+1 & \rho_{1} & \rho_1 & \rho_2 & \rho_2 & \rho_2 \\
+\rho_1 & 1  & \rho_1 & \rho_2 & \rho_2 & \rho_2 \\
+\rho_1 & \rho_1 & 1  & \rho_2 & \rho_2 & \rho_2 \\
+\rho_2 & \rho_2 & \rho_2  & 1 & \rho_1 & \rho_1 \\
+\rho_2 & \rho_2 & \rho_2  & \rho_1 & 1 & \rho_1 \\
+\rho_2 & \rho_2 & \rho_2  & \rho_1 & \rho_1 & 1 \\
+\end{pmatrix}
+\]
+
+That is, a subject's intensity ratings with a time point may be correlated by $\rho_1$, and ratings across time points may be correlated by $\rho_2$. In the simulations, we suppose $\rho_1 = .4$ and $\rho_2 = .2$ for all tastes and $\sigma_b^2 = 1$. $e_{ijc}$ are independent $N(0, .2^2)$ observation level random variables.
+
+## Sample size study
+
+To study the precision of confidence intervals under various values of $\mathbf{\beta}_{1t} = \{\beta_{11}, \beta_{21}, \beta_{31} \}$ and sample size $n$, we used the following simulation approach. 
+
+1. Generate the data as described in the data generating model with $\mathbf{\beta} = \{-25, -30, -35, \beta_{11}, \beta_{21}, \beta_{31}, 15, 20, 25 \}$. The values of $\beta_{t1}$ considered are given in the table below:
+
+```{r table-simple, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+require(pander)
+panderOptions('table.split.table', Inf)
+# set.caption("My great data")
+my.data <- " 
+   Qualitative effect sizes | $\\beta_{t1} = (\\beta_{11}, \\beta_{21}, \\beta_{31} )$  
+  (small, none, none)        | (0.5, 0, 0)
+  (small, small, none)       | (0.5, 0.5, 0)
+  (small, small, small)      | (0.5, 0.5, 0.5)
+  (moderate, none, none)     | (1, 0, 0)
+  (moderate, moderate, none) | (1, 1, 0)
+  (large, none, none)        | (1.5, 0, 0)"
+df <- read.delim(textConnection(my.data),header=FALSE,sep="|",strip.white=TRUE,stringsAsFactors=FALSE)
+names(df) <- unname(as.list(df[1,])) # put headers on
+df <- df[-1,] # remove first row
+row.names(df)<-NULL
+pander(df, style = 'rmarkdown')
+```
+
+
+2. Using the R package `geepack` [@geepack], fit a generalized estimating equation (GEE) model [@liang1986] with main effects specified as in the data generating model and an independence working correlation matrix.
+
+3. Compute the 90\%^[A goal is to contain the overall type I error to 0.3. However, joint confidence regions are generally difficult to characterize. Thus, a simple, yet conservative Bonferroni-type approach is used.] Wald-type confidence intervals for each of $(\beta_{11}, \beta_{21}, \beta_{31} )$. It is well known that standard estimating equation variance estimators underestimate the true variance in small samples. To account for this, the bias correction of @fay2001 is applied with $b = 0.75$.
+
+4. Repeat steps 1-3 1000 times. 
+
+The distribution of confidence intervals obtained from the Monte Carlo samples are then plotted to form a judgement on appropriate and feasible sample sizes. Coverage and average confidence interval widths are also computed. 
+
+## Features and limitations of study
+
+The hypothetical suprathreshold intensity curves are linear on the $log_{10}$ scale. This is based on the observed curves for NaCL in Figure 4 of @galindo2009. Also, the geometric means presented in @webb2015 appear to have a linear relationship with $log_{10}$ of concentrations of 100, 200, and 400 mM for sucrose and NaCL. The proposed model for this simulation study assumes that the slope of suprathreshold intensity curves do not change with fasting (i.e., no $x$ by $log_{10}(c)$ interaction). In analysis of the actual data, the presence of an interaction will be assessed visually based on mean psychophysical curves as well as adding an interaction term to the analysis model. For the purposes of this simulation study, however, we assume the interaction does not exist.
+
+This model also excludes the gLMS rating for the control concentration (distilled water). This appears to accord with how other studies have analyzed their data, but we note that a subject's gLMS rating for the control concentration may provide useful information about their suprathreshold intensity curves. The data collected on the control concentration in this pilot study will help us to better understand how this information could be used in future studies. 
+
+The simulation study is designed to measure confidence intervals of three hypothetical tastes independently. However, a confidence region that accounts for the correlation between the three parameters may ultimately be of more interest and could be used to control an overall type I error. Due to inherent difficulties in estimating and characterizing 3-dimensional confidence regions, we chose a simple, yet conservative approach of dividing the type I error equally for each taste.
+
+## Results
+
+```{r setup, include=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r datagen, echo=FALSE, eval=FALSE}
+## Variance components ##
+
+make_Sigmad <- function(rhod){
+  x <- diag(18)
+  x <- x + rhod
+  diag(x) <- 1
+  return(x)
+}
+
+rho1 <- .4
+rho2 <- .2
+Sigmab_ <- matrix(
+  c(1,  rho1, rho1, rho2, rho2, rho2, 
+    rho1, 1, rho1,  rho2, rho2, rho2,
+    rho1, rho1, 1,  rho2, rho2, rho2,  
+    rho2, rho2, rho2, 1, rho1, rho1,
+    rho2, rho2, rho2, rho1, 1, rho1, 
+    rho2, rho2, rho2, rho1, rho1, 1), 
+  nrow = 6, ncol = 6)
+
+sigma2b <- 4
+sigma2d <- 1
+Sigmab <- Matrix::bdiag(replicate(3, Sigmab_, simplify = FALSE))
+Sigmae <- diag(.2, 18)
+
+## Covariate matrix ##
+
+design <- matrix(
+  c(rep(1, 6), rep(0, 12),
+    rep(0, 6), rep(1, 6), rep(0, 6),
+    rep(0, 12), rep(1, 6),
+    rep(0, 3), rep(1, 3), rep(0, 12),
+    rep(0, 9), rep(1, 3), rep(0, 6),
+    rep(0, 15), rep(1, 3),
+    rep(log10(c(100, 200, 400)), 2), rep(0, 12),
+    rep(0, 6), rep(log10(c(100, 200, 400)), 2), rep(0, 6),
+    rep(0, 12), rep(log10(c(100, 200, 400)), 2) ),
+  nrow = 18
+)
+
+gen_data <- function(n, beta_x, rho_d){
+  beta <- c(-25,  -30, -35, beta_x, 15, 20, 25 )
+  
+  mu <- design %*% beta
+  
+  dplyr::data_frame(
+    y = as.vector(t(mnormt::rmnorm(n = n, 
+                 mean = mu,  
+                 varcov = (sigma2d * make_Sigmad(rho_d)) + (sigma2b * Sigmab) + Sigmae))),
+    id   = rep(1:n, each = 18),
+    t    = rep(rep(c('a', 'b', 'c'), each = 6), n),
+    c    = rep(c(100, 200, 400), n*6),
+    x    = rep(c(0, 0, 0, 1, 1, 1), n*3),
+    idtx = paste(id, t, x))
+}
+```
+
+```{r simulations, echo = FALSE, eval = FALSE}
+# generate_data(1, c(0, 5, 5, 5))
+geex_correct <- function(data, model){
+  f <- geex::make_eefun(model = model, data = data)
+  function(theta){
+    f(theta)
+  }
+}
+simulation <- function(n, effect, alpha, rho_d){
+  dt <- gen_data(n, effect, rho_d = rho_d) 
+  m  <- geepack::geeglm(y ~ -1 + factor(t) + factor(t):x + factor(t):log10(c), id = id, data = dt, 
+                        family = gaussian(link = 'identity'))
+  glist <- list(splitdt = split(dt, f = dt$id), eeFUN = geex_correct)
+  ge <- geex::estimate_equations(
+    data = dt,
+    units     = 'id',
+    eeFUN     = geex_correct,
+    corrections_list = list(fay = list(fun = geex::fay_bias_correction,
+                                       options = list(b = 0.75))),
+    findroots = FALSE,
+    roots     = coef(m),
+    model = m)
+  x <- broom::tidy(m)[4:6, c('term', 'estimate', 'std.error')]
+  x$std.error <- sqrt(diag(ge$corrections$fay)[4:6]) 
+  x$conf.low  <- x$estimate - qnorm(1 - alpha/2, lower.tail = TRUE) * x$std.error 
+  x$conf.high <- x$estimate + qnorm(1 - alpha/2, lower.tail = TRUE) * x$std.error 
+  x
+  # any(x[4:6, ]$p.value < alpha/3)
+}
+
+do_simulations <- function(nsims, n, effect, rho_d, alpha){
+  lapply(1:nsims,  function(i) {
+    z <- simulation(n, effect, alpha, rho_d) 
+    z$simID  <- i
+    z$taste  <- c('a', 'b', 'c')
+    z$n      <- n
+    z$tru    <- effect
+    z$beta   <- paste(effect, collapse = ',')
+    z$rho_d  <- rho_d
+    z
+  }) %>% 
+    bind_rows()
+}
+
+#do_simulations(3, 40, c(.5, .5, 0), 0, .1)
+```
+
+```{r settings, echo = FALSE, eval=FALSE}
+settings <- expand.grid(
+  # rho_d  = c(0, .2, .4),
+  rho_d  = 0,
+  n      = c(20, 30, 40),
+  alpha  = c(.3/3),
+  beta_x = list(c(0, 0, 0),
+                c(.5, 0, 0),
+                c(.5, .5, 0),
+                c(.5, .5, .5),
+                c(1, 0, 0),
+                c(1, 1, 0),
+                c(1.5, 0, 0)))
+```
+
+```{r results, echo = FALSE, eval = FALSE}
+results <- Map(do_simulations, nsims = 1000, 
+    effect = settings$beta_x, 
+    n      = settings$n,
+    rho_d  = settings$rho_d,
+    alpha  = settings$alpha) %>%
+  bind_rows() 
+
+save(results, file = 'proposals/sample_size/ss_results.rda')
+```
+```{r results2, echo=FALSE, eval=TRUE, warning=FALSE, message=FALSE}
+load(file = 'ss_results.rda')
+results <- results %>% 
+  mutate(signif = ifelse(conf.low > 0 | conf.high < 0, 1, 0)) %>%
+  group_by(n, beta, taste) %>%
+  arrange(n, beta, taste, estimate) %>%
+  mutate(plot_order =  ifelse(taste == 'a', 1:n(), NA)) %>%
+  ungroup() %>% group_by(n, beta, simID) %>%
+  mutate(plot_order =  ifelse(taste != 'a', first(plot_order), plot_order))
+
+results_summary <- results %>%
+  group_by(beta, taste, n, rho_d) %>%
+  summarise(av_width = mean(abs(conf.high - conf.low)),
+            coverage = mean(conf.low < tru & conf.high > tru),
+            av_width_text = paste('Avg. width:', round(av_width, 2)),
+            coverage_text = paste('Coverage:', round(coverage, 2)))
+
+power_summary <- results %>%
+  group_by(beta, n, rho_d, simID) %>%
+  summarise(reject    = any(conf.low > 0 | conf.high < 0)) %>%
+  group_by(beta, n, rho_d) %>%
+  summarise(power = mean(reject))
+  
+```
+
+```{r, echo = FALSE, eval=TRUE, warning=FALSE, message = FALSE}
+plot_results <- function(effect){
+  ggplot(results %>% filter_(~ beta == effect), 
+         aes(x = plot_order, y = estimate, color = factor(signif))) + 
+  geom_point(size = .1, alpha = .3) + 
+  geom_hline(aes(yintercept = 0),   color = 'grey25', linetype = 'solid') + 
+  geom_hline(aes(yintercept = tru), color = 'grey50', linetype = 'dotted') + 
+  geom_segment(aes(xend = plot_order, y = conf.low, yend = conf.high),
+               alpha = .2, size = .1) + 
+  geom_text(data = results_summary %>% filter_(~ beta == effect), 
+            aes(x = 1, y = 2, label = av_width_text), size = 3,
+            hjust = 0,
+            inherit.aes = FALSE) + 
+  scale_x_discrete('') + 
+  scale_color_manual('', values = c('black', 'red'), guide= FALSE) + 
+  facet_grid(taste  ~ n) + 
+  theme_classic()
+}
+```
+
+Results for $\beta_{t1} = (0.5, 0, 0)$ are shown in the figure below. The figure show point estimates and confidence intervals for 1000 simulated datasets for three hypothetical tastes. Each point/segment represents one simluation. Simulations are sorted by the point estimates for taste a. Horizontal lines are zero (solid) and the true effect size used to generate data. The color red indicates the interval does not include zero.
+
+Estimates of average width were similar across settings of $\beta_{t1}$. 
+
+```{r, echo = FALSE, eval=TRUE, fig.height = 7, fig.width = 7.5, warning=FALSE, message=FALSE}
+plot_results('0.5,0,0')
+```
+
+```{r, echo = FALSE, eval=FALSE, caption = ''}
+plot_results('0.5,0.5,0')
+```
+
+```{r, echo = FALSE, eval=FALSE, caption = ''}
+plot_results('0.5,0.5,0.5')
+```
+
+```{r, echo = FALSE, eval=FALSE, caption = ''}
+plot_results('1,0,0')
+```
+
+```{r, echo = FALSE, eval=FALSE, caption = ''}
+plot_results('1,1,0')
+```
+
+```{r, echo = FALSE, eval=FALSE, caption = ''}
+plot_results('1.5,0,0')
+```
+
+# Loss to follow-up
+
+Due to the nature of the fasting and the fact that fasting patients do not leave TNH during their fasting, we do not envision loss to follow-up being a large issue. There may be subjects who begin the study but end their fast before 5 days have passed or subjects who do the baseline taste tests and decide not participate in the follow-up taste tests. To accomodate these potential situations, an additional 10\% will be added to the proposed sample size.
+
+# Sample size justification
+
+Based on having no knowledge of fasting effects on taste adaptation and limited knowledge of taste adaptation in general, we judge that width of 1.5 or less is acceptable precision for the range of plausable values (i.e. confidence intervals) for each $\beta_{t1}$. Based on the simulation study, a sample size of 20 appears sufficient to create 90\% confidence intervals with a width of less than 1.5 for each taste. To accomodate possible loss to follow-up, we will recruit a sample size of 22 for this pilot study.
+
+# References
