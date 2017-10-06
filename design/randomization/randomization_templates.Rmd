@@ -20,11 +20,11 @@ library(purrr)
 ```{r gather_data, echo = FALSE, message=FALSE, warning=FALSE}
 # id <- "R001"
 id <- params$rid
-rtdt <- read.csv("rtdt_ids_2017-09-18.csv")
+rtdt <- read.csv("rtdt_ids_2017-10-06.csv")
 rtdt_id <- rtdt %>%
   filter_(~ randomization_id == id)
 
-supra <- read.csv("supra_ids_2017-09-18.csv")
+supra <- read.csv("supra_ids_2017-10-06.csv")
 supra_id <- supra %>%
   filter_(~ randomization_id == id)
 ```
