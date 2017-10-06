@@ -37,11 +37,19 @@ tastePerms <- allPerms(length(tastes), how(observed = TRUE)) %>%
 
 #### Suprathreshold assay (supra) 
 
-conc_supra <- c(0, 100, 200, 400)
-nlevels_supra <- length(conc_supra)
+conc_supra_letters <- LETTERS[1:4]
+nlevels_supra <- length(conc_supra_letters)
 supraPerms <- allPerms(nlevels_supra, how(observed = TRUE)) %>%
-  apply(1, function(x) conc_supra[x]) %>%
+  apply(1, function(x) conc_supra_letters[x]) %>%
   t()
+
+conc_supra_sucr <- c(0, 100, 200, 400)
+conc_supra_nacl <- c(0, 50, 100, 200)
+conc_supra <- data_frame(
+  assay_taste = rep(c('sucr', 'nacl'), each = 4),
+  conc  = rep(conc_supra_letters, times = 2),
+  conc2  = c(conc_supra_sucr, conc_supra_nacl)
+)
 
 # Functions ####
 
@@ -94,7 +102,7 @@ randomize_supra_order <- function(.taste_order, .nlevels, .supraPerms){
 
 #### Read IDs ####
 
-ids <- read_excel("randomization/Taste adaptation sample codes.xlsx") %>%
+ids <- read_excel("design/randomization/Taste_adaptation_sample_codes_corrected.xlsx") %>%
   mutate_(
     assay_taste =~ case_when(
       grepl("^sucrose", .$taste) ~ "sucr",
@@ -158,7 +166,9 @@ randomize_taste_order(timepoints, tastePerms) %>%
   randomize_supra_order(.nlevels = nlevels_supra, .supraPerms = supraPerms) %>%
   mutate(randomization_id = paste0("R", formatC(i, width = 3, flag ="0"))) 
 }) %>% bind_rows() %>%
-  select(randomization_id, everything()) ->
+  select(randomization_id, everything()) %>%
+  left_join(conc_supra, by = c("assay_taste", "conc")) %>%
+  select_(~-conc) %>% select_(~everything(), conc =~ conc2) ->
   supra
 
 supra %>%
@@ -168,5 +178,5 @@ supra %>%
   supra
 
 #### Output ####
-write.csv(rtdt, file = paste0("randomization/rtdt_ids_", Sys.Date(), ".csv"), row.names = FALSE)
-write.csv(supra, file = paste0("randomization/supra_ids_", Sys.Date(), ".csv"), row.names = FALSE)
+write.csv(rtdt, file = paste0("design/randomization/rtdt_ids_", Sys.Date(), ".csv"), row.names = FALSE)
+write.csv(supra, file = paste0("design/randomization/supra_ids_", Sys.Date(), ".csv"), row.names = FALSE)
