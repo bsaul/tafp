@@ -6,6 +6,9 @@
 \usage{
 retrieve_redcap_data(token)
 }
+\arguments{
+\item{token}{RedCap token}
+}
 \description{
 Retrieve and save RedCap data
 }
