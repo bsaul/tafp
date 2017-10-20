@@ -1,0 +1,13 @@
+Package: tasp
+Title: THN Foundation Taste Adaptation Study Pilot
+Version: 0.0.0.9000
+Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
+Depends: R (>= 3.4.1)
+Imports:
+  REDCapR (>= 0.9.8),
+  dplyr (>= 0.7)
+License: NA
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
