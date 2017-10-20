@@ -6,9 +6,4 @@
 # CHANGELOG:
 #------------------------------------------------------------------------------#
 
-library(REDCapR)
-
-uri <- ""
-token <- ""
-
-all_data <- redcap_read(redcap_uri=uri, token=token)$data
+retrieve_redcap_data(token)
