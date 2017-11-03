@@ -42,7 +42,19 @@ tasp_data_20171103$dtrt %>%
   tidyr::gather(key = "variable", value = "response", 
                 -record_id, -redcap_event_name, -randomization_id_rtdt) %>%
   dplyr::mutate(
-    variable2 = stringr::str_replace(variable, "(_0.)$", ""),
-    taste_number = stringr::str_extract(variable, "0.$"),
-    group_number = stringr::str_extract(variable2, "\\d")
-  )
+    variable2     = stringr::str_replace(variable, "(_0.)$", ""),
+    variable_name = stringr::str_extract(variable, "(group|sample|recognition_taste)" ),
+    taste_number  = stringr::str_extract(variable, "0.$"),
+    group_number  = stringr::str_extract(variable2, "\\d")
+  ) %>%
+  dplyr::select(-variable, -variable2) %>%
+  dplyr::arrange(record_id, redcap_event_name, taste_number, group_number, variable_name) %>%
+  tidyr::unite(temp, record_id, redcap_event_name, 
+               randomization_id_rtdt, taste_number, group_number, sep = ":::") %>%
+  dplyr::group_by(temp) %>%
+  dplyr::mutate(id = 1:n()) %>%
+  tidyr::spread(variable_name, response) %>%
+  tidyr::separate(temp, sep = ":::",
+                  into = c("record_id", "redcap_event_name", 
+                           "randomization_id_rtdt", "taste_number", "group_number"))
+
