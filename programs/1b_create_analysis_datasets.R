@@ -37,24 +37,60 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
   
 })
 
-tasp_data_20171103$dtrt %>% 
+hold_dtrt <- tasp_data_20171103$dtrt %>% 
+  dplyr::mutate(
+    time = case_when(
+      redcap_event_name == "day_0_arm_1" ~ 1,
+      redcap_event_name == "day_5_arm_1" ~ 2,
+      redcap_event_name == "final_fasting_day_arm_1" ~ 3,
+      redcap_event_name == "refeed_day_3_arm_1" ~ 4)
+  ) %>%
   dplyr::select(-contains("comment"), -date_01, -date_02) %>%
   tidyr::gather(key = "variable", value = "response", 
-                -record_id, -redcap_event_name, -randomization_id_rtdt) %>%
+                -record_id, -redcap_event_name, -randomization_id_rtdt, -time) %>%
   dplyr::mutate(
-    variable2     = stringr::str_replace(variable, "(_0.)$", ""),
-    variable_name = stringr::str_extract(variable, "(group|sample|recognition_taste)" ),
-    taste_number  = stringr::str_extract(variable, "0.$"),
-    group_number  = stringr::str_extract(variable2, "\\d")
+    variable2      = stringr::str_replace(variable, "(_0.)$", ""),
+    variable_name  = stringr::str_extract(variable, "(group|sample|recognition_taste)" ),
+    taste_position = stringr::str_extract(variable, "0.$"),
+    level          = as.integer(stringr::str_extract(variable2, "\\d+")),
+    variable_name  = if_else(variable_name == "group", "chosen_cup_position", 
+                             if_else(variable_name == "sample", "cup_id", variable_name))
   ) %>%
   dplyr::select(-variable, -variable2) %>%
-  dplyr::arrange(record_id, redcap_event_name, taste_number, group_number, variable_name) %>%
-  tidyr::unite(temp, record_id, redcap_event_name, 
-               randomization_id_rtdt, taste_number, group_number, sep = ":::") %>%
+  dplyr::arrange(record_id, redcap_event_name, taste_position, level, variable_name) %>%
+
+  tidyr::unite(temp, record_id, redcap_event_name, time,
+               randomization_id_rtdt, taste_position, level, sep = ":::") %>%
   dplyr::group_by(temp) %>%
-  dplyr::mutate(id = 1:n()) %>%
+  # dplyr::mutate(id = 1:n()) %>%
   tidyr::spread(variable_name, response) %>%
   tidyr::separate(temp, sep = ":::",
-                  into = c("record_id", "redcap_event_name", 
-                           "randomization_id_rtdt", "taste_number", "group_number"))
+                  into = c("record_id", "redcap_event_name", "time", 
+                           "randomization_id", "taste_position", "level")) %>%
+  dplyr::mutate(
+    taste_position = as.integer(taste_position) - 1,
+    level          = as.integer(level),
+    time           = as.integer(time),
+    chosen_cup_position = chosen_cup_position + 1
+  ) %>%
+  dplyr::arrange(record_id, redcap_event_name, taste_position, level)
+
+
+## Unblind
+
+dtrt_key <- read.csv("design/randomization/rtdt_ids_2017-10-06.csv")
+dtrt_key
+
+hold_dtrt %>%
+  left_join(dtrt_key, by = c("randomization_id", "time", "taste_position", "level",  "cup_id")) %>%
+  dplyr::mutate(
+    chose_correct = chosen_cup_position == cup_order
+  ) %>%
+  dplyr::select(
+    record_id, time, randomization_id, taste_position, assay_taste, level, cup_id,
+    chosen_cup_position, correct_cup_position = cup_order, chose_correct
+  ) %>%
+  filter(record_id %in% 5:6) %>%
+  View()
+
 
