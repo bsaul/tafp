@@ -12,7 +12,6 @@
 
 dtrt_key <- read.csv("design/randomization/rtdt_ids_2017-10-06.csv",
                      stringsAsFactors = FALSE)
-# dtrt_key
 
 tasp_data_20171103$dtrt_long_unblind <- tasp_data_20171103$dtrt_long_blind %>%
   left_join(dtrt_key, by = c("randomization_id", "time", "taste_position", "level",  "cup_id")) %>%
@@ -23,7 +22,3 @@ tasp_data_20171103$dtrt_long_unblind <- tasp_data_20171103$dtrt_long_blind %>%
     record_id, time, randomization_id, taste_position, assay_taste, level, cup_id,
     chosen_cup_position, correct_cup_position = cup_order, chose_correct
   ) 
-
-# %>%
-#   filter(record_id %in% 5:6) %>%
-#   View()

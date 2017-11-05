@@ -53,7 +53,7 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
     ) %>%
     dplyr::arrange(record_id, time, taste_position, level)
   
-  # Create long supra dataset ####
+  # create long supra dataset ####
   supra_long_blind <- tasp_data_20171103$supra %>% 
     dplyr::select(-contains("comment"), -contains("date_st")) %>%
     dplyr::group_by(record_id, randomization_id_st, time) %>%
@@ -80,8 +80,3 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
     dplyr::select(randomization_id = randomization_id_st, everything())
   
 })
-
-
-
-
-tasp_data_20171103$supra_long_blind
