@@ -8,9 +8,13 @@
 #' 
 #------------------------------------------------------------------------------#
 
-create_analysis_data_frame <- function(input_data, settings){
+create_analysis_data_frame <- function(input_data, settings, preprocess){
+  
+  # 0. Preprocess
+  basis_data <- preprocess(input_data)
+  
   # 1. Select variables
-  basis_data <- input_data %>%
+  basis_data <- basis_data %>%
     dplyr::select(settings$key_variables, settings$keep_variables)
   
   # 2. Apply criteria filter
