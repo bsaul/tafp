@@ -10,10 +10,11 @@
 
 ## Unblind dtrt
 
-dtrt_key <- read.csv("design/randomization/rtdt_ids_2017-10-06.csv")
-dtrt_key
+dtrt_key <- read.csv("design/randomization/rtdt_ids_2017-10-06.csv",
+                     stringsAsFactors = FALSE)
+# dtrt_key
 
-tasp_data_20171103$dtrt_long_blind %>%
+tasp_data_20171103$dtrt_long_unblind <- tasp_data_20171103$dtrt_long_blind %>%
   left_join(dtrt_key, by = c("randomization_id", "time", "taste_position", "level",  "cup_id")) %>%
   dplyr::mutate(
     chose_correct = chosen_cup_position == cup_order
