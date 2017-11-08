@@ -4,10 +4,12 @@
 \alias{create_analysis_data_frame}
 \title{Munge and save RedCap data}
 \usage{
-create_analysis_data_frame(input_data, settings)
+create_analysis_data_frame(input_data, settings, preprocess)
 }
 \arguments{
-\item{settings}{}
+\item{input_data}{self-explanatory}
+
+\item{settings}{list of settings}
 }
 \description{
 Munge and save RedCap data

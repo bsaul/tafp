@@ -2,3 +2,4 @@
 
 export(create_analysis_data_frame)
 export(retrieve_redcap_data)
+export(tasp_data)
