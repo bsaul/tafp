@@ -8,7 +8,7 @@
 #------------------------------------------------------------------------------#
 
 
-tasp_data_20171103 <- within(tasp_data_20171103, {
+out <- within(get(paste0("tasp_data_", retrieval_date)), {
   # create long flq dataset ####
   flq_long <- flq %>%
     dplyr::select(-gender_flq, -diet_flq, -contains("date"), -age_flq) %>%
@@ -30,28 +30,37 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
     dplyr::mutate(
       variable2      = stringr::str_replace(variable, "(_0.)$", ""),
       variable_name  = stringr::str_extract(variable, "(group|sample|recognition_taste)" ),
-      taste_position = stringr::str_extract(variable, "0.$"),
+      taste_order    = stringr::str_extract(variable, "0.$"),
       level          = as.integer(stringr::str_extract(variable2, "\\d+")),
       variable_name  = if_else(variable_name == "group", "chosen_cup_position", 
                                if_else(variable_name == "sample", "cup_id", variable_name))
     ) %>%
     dplyr::select(-variable, -variable2) %>%
-    dplyr::arrange(record_id, time, taste_position, level, variable_name) %>%
+    dplyr::arrange(record_id, time, taste_order, level, variable_name) %>%
     
     tidyr::unite(temp, record_id, time,
-                 randomization_id_rtdt, taste_position, level, sep = ":::") %>%
+                 randomization_id_rtdt, taste_order, level, sep = ":::") %>%
     dplyr::group_by(temp) %>%
     tidyr::spread(variable_name, response) %>%
     tidyr::separate(temp, sep = ":::",
                     into = c("record_id", "time", 
-                             "randomization_id", "taste_position", "level")) %>%
+                             "randomization_id", "taste_order", "level")) %>%
     dplyr::mutate(
-      taste_position = as.integer(taste_position) - 1,
+      taste_order    = as.integer(taste_order),
       level          = as.integer(level),
       time           = as.integer(time),
-      chosen_cup_position = chosen_cup_position + 1
+      chosen_cup_position = chosen_cup_position + 1,
+      recognition_taste = case_when(
+        recognition_taste == 1 ~ "nacl",
+        recognition_taste == 2 ~ "sucr",
+        recognition_taste == 3 ~ "bitt",
+        recognition_taste == 4 ~ "sour",
+        recognition_taste == 5 ~ "uman",
+        recognition_taste == 6 ~ "fatt",
+        recognition_taste == 7 ~ "none"
+      )
     ) %>%
-    dplyr::arrange(record_id, time, taste_position, level)
+    dplyr::arrange(record_id, time, taste_order, level)
   
   # create long supra dataset ####
   supra_long_blind <- tasp_data_20171103$supra %>% 
@@ -65,11 +74,20 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
         dplyr::mutate(
           cup_order      = as.integer(stringr::str_extract(variable, "\\d")),
           taste_position = as.integer(stringr::str_extract(variable, "0.$")),
-          variable       = if_else(grepl("taste", variable), "flavor_tasted", "response" )
+          variable       = if_else(grepl("taste", variable), "recognition_taste", "response" )
         ) %>%
         dplyr::group_by(taste_position) %>%
         dplyr::mutate(
-          flavor_tasted = max(response[variable == "flavor_tasted"])
+          recognition_taste = max(response[variable == "recognition_taste"]),
+          recognition_taste = case_when(
+            recognition_taste == 1 ~ "nacl",
+            recognition_taste == 2 ~ "sucr",
+            recognition_taste == 3 ~ "bitt",
+            recognition_taste == 4 ~ "sour",
+            recognition_taste == 5 ~ "uman",
+            recognition_taste == 6 ~ "fatt",
+            recognition_taste == 7 ~ "none"
+          ),
         ) %>%
         dplyr::filter(
           variable == "response"
@@ -78,5 +96,7 @@ tasp_data_20171103 <- within(tasp_data_20171103, {
     ) %>%
     tidyr::unnest() %>%
     dplyr::select(randomization_id = randomization_id_st, everything())
-  
 })
+
+assign(paste0("tasp_data_", retrieval_date), out)
+rm(out)
