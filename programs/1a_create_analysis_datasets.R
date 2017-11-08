@@ -7,7 +7,7 @@
 #      TODO: add post process capability for (e.g. removing variables)
 #------------------------------------------------------------------------------#
 
-retrieval_date <- "20171103"
+retrieval_date <- "20171107"
 in_data_name  <- paste0("tasp_retrieval_", retrieval_date)
 out_data_name <- paste0("tasp_data_", retrieval_date)
 
