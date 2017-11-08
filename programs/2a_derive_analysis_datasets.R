@@ -11,14 +11,25 @@
 ## Unblind dtrt
 
 dtrt_key <- read.csv("design/randomization/rtdt_ids_2017-10-06.csv",
-                     stringsAsFactors = FALSE)
+                     stringsAsFactors = FALSE) %>%
+  dplyr::select(everything(), is_taste_position = taste_position) %>%
+  dplyr::group_by(randomization_id, time) %>%
+  dplyr::mutate(taste_order = rep(1:2, each = n()/2))
 
-tasp_data_20171103$dtrt_long_unblind <- tasp_data_20171103$dtrt_long_blind %>%
-  left_join(dtrt_key, by = c("randomization_id", "time", "taste_position", "level",  "cup_id")) %>%
+dtrt_long_unblind <- tasp_data(retrieval_date)$dtrt_long_blind %>%
+  left_join(
+    dtrt_key, 
+    by = c("randomization_id", "time", "taste_order", "level",  "cup_id")
+  ) %>%
   dplyr::mutate(
-    chose_correct = chosen_cup_position == cup_order
+    chose_correct_cup = chosen_cup_position == cup_order,
+    cup_taste         = if_else(grepl("h2o", cup_taste), "none", cup_taste),
+    chose_correct_taste = cup_taste == recognition_taste
   ) %>%
   dplyr::select(
-    record_id, time, randomization_id, taste_position, assay_taste, level, cup_id,
-    chosen_cup_position, correct_cup_position = cup_order, chose_correct
+    record_id, time, randomization_id, taste_order, assay_taste, level, conc, 
+    cup_id, cup_taste, chosen_cup_position, correct_cup_position = cup_order, 
+    chose_correct_cup, recognition_taste, chose_correct_taste
   ) 
+
+# write.csv(dtrt_long_unblind %>% filter(randomization_id %in% c("R001", "R004", "R005")), file = "dtrt_test.csv")
