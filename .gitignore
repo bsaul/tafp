@@ -11,3 +11,4 @@
 *.xlsx
 **token.R
 *.token
+*retrieval_logs**
