@@ -4,7 +4,7 @@
 \alias{retrieve_redcap_data}
 \title{Retrieve and save RedCap data}
 \usage{
-retrieve_redcap_data(token)
+retrieve_redcap_data()
 }
 \arguments{
 \item{token}{RedCap token}
