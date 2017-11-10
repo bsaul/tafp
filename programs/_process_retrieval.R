@@ -29,11 +29,10 @@ assign(out_data_name, lapply(analysis_data_settings, function(settings) {
 ## Create long versions of primary datasets
 source("programs/1b_derive_long_datasets.R")
 
-
 ## Create unblinded versions of dtrt and supra datasets
 source("programs/2a_unblind_dtrt_supra_datasets.R")
 
-
+## Save and clean up
 save(list = c(out_data_name), file = paste0("data/", out_data_name, ".rda"))
 rm(list = ls())
 devtools::install()
