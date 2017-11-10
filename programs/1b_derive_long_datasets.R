@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------#
-#     TITLE: Creation of tasp analysis datasets
+#     TITLE: Derive long versions of primary tasp analysis datasets
 #      DATE: 2017NOV03
 #    AUTHOR: B. Saul
 #      DESC: 
@@ -7,8 +7,7 @@
 #      TODO: 
 #------------------------------------------------------------------------------#
 
-
-out <- within(get(paste0("tasp_data_", retrieval_date)), {
+assign(out_data_name,  within(get(out_data_name), {
   # create long flq dataset ####
   flq_long <- flq %>%
     dplyr::select(-gender_flq, -diet_flq, -contains("date"), -age_flq) %>%
@@ -96,7 +95,5 @@ out <- within(get(paste0("tasp_data_", retrieval_date)), {
     ) %>%
     tidyr::unnest() %>%
     dplyr::select(randomization_id = randomization_id_st, everything())
-})
+} )) 
 
-assign(paste0("tasp_data_", retrieval_date), out)
-rm(out)
