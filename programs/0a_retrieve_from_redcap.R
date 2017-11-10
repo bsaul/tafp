@@ -6,5 +6,4 @@
 # CHANGELOG:
 #------------------------------------------------------------------------------#
 
-retrieve_redcap_data(token)
-rm(token)
+retrieve_redcap_data()
