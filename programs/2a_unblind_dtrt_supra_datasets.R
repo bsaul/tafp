@@ -23,7 +23,7 @@ assign(out_data_name, within(get(out_data_name), {
       by = c("randomization_id", "time", "taste_order", "level",  "cup_id")
     ) %>%
     dplyr::mutate(
-      chose_correct_cup = chosen_cup_position == cup_order,
+      chose_correct_cup = (chosen_cup_position == cup_order) & is_taste_position,
       cup_taste         = if_else(grepl("h2o", cup_taste), "none", cup_taste),
       chose_correct_taste = cup_taste == recognition_taste
     ) %>%
