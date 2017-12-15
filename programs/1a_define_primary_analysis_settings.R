@@ -159,7 +159,7 @@ analysis_data_settings <- list(
   flq = list(
     description    = "A description",
     key_variables  = key_vars,
-    keep_variables = 3:96,
+    keep_variables = 3:97,
     criteria       = quo(time %in% c(0,5)),
     checks         = list(
       
@@ -181,7 +181,7 @@ analysis_data_settings <- list(
   dtrt = list(
     description = "A description",
     key_variables  = key_vars,
-    keep_variables = 149:214,
+    keep_variables = 153:218,
     criteria       = quo(time %in% 1:4),
     checks         = list(
       list(
@@ -199,7 +199,7 @@ analysis_data_settings <- list(
   supra = list(
     description = "A description",
     key_variables  = key_vars,
-    keep_variables = 215:230,
+    keep_variables = 219:242,
     criteria       = quo(time %in% 1:4),
     checks         = list(
       list(
@@ -210,13 +210,14 @@ analysis_data_settings <- list(
         with      = "excluded",
         action       = supra_check_exclude_1
       )),
-      post_process  = function(x) {x %>% select(-contains("complete")) }),
+      post_process  = function(x) {x %>% select(-contains("complete")) %>%
+          filter(randomization_id_st != "")}),
   
   # Treatment ####
   trt = list(
     description    = "A description",
     key_variables  = key_vars,
-    keep_variables = 132:139,
+    keep_variables = 134:142,
     criteria       = quo(time == 1),
     checks         = list(
       list(
@@ -233,7 +234,7 @@ analysis_data_settings <- list(
   cln =  list(
     description    = "A description",
     key_variables  = key_vars,
-    keep_variables = 140:148,
+    keep_variables = 144:152,
     criteria       = quo(time %in% 1:4),
     checks         = list(
       list(
