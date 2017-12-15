@@ -62,7 +62,7 @@ assign(out_data_name,  within(get(out_data_name), {
     dplyr::arrange(record_id, time, taste_order, level)
   
   # create long supra dataset ####
-  supra_long_blind <- tasp_data_20171103$supra %>% 
+  supra_long_blind <- supra %>% 
     dplyr::select(-contains("comment"), -contains("date_st")) %>%
     dplyr::group_by(record_id, randomization_id_st, time) %>%
     tidyr::nest() %>%
