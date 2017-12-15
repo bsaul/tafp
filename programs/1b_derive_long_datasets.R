@@ -68,30 +68,33 @@ assign(out_data_name,  within(get(out_data_name), {
     tidyr::nest() %>%
     dplyr::mutate(
       data = purrr::map(data, 
-      ~ .x %>% 
-        tidyr::gather(key = "variable", value = "response") %>%
-        dplyr::mutate(
-          cup_order      = as.integer(stringr::str_extract(variable, "\\d")),
-          taste_position = as.integer(stringr::str_extract(variable, "0.$")),
-          variable       = if_else(grepl("taste", variable), "recognition_taste", "response" )
-        ) %>%
-        dplyr::group_by(taste_position) %>%
-        dplyr::mutate(
-          recognition_taste = max(response[variable == "recognition_taste"]),
-          recognition_taste = case_when(
-            recognition_taste == 1 ~ "nacl",
-            recognition_taste == 2 ~ "sucr",
-            recognition_taste == 3 ~ "bitt",
-            recognition_taste == 4 ~ "sour",
-            recognition_taste == 5 ~ "uman",
-            recognition_taste == 6 ~ "fatt",
-            recognition_taste == 7 ~ "none"
-          ),
-        ) %>%
-        dplyr::filter(
-          variable == "response"
-        ) %>%
-        dplyr::select(-variable))
+          ~ .x %>% 
+            tidyr::gather(key = "variable", value = "response")   %>%
+            dplyr::mutate(
+              cup_order      = as.integer(stringr::str_extract(variable, "\\d")),
+              is_cup_id      = stringr::str_detect(variable, "_cup_id") * 1,
+              variable       = gsub("_cup_id", "", variable),
+              taste_position = as.integer(stringr::str_extract(variable, "0.$")),
+              variable       = if_else(grepl("taste", variable), "recognition_taste", "response" ),
+              variable       = if_else(is_cup_id == 1, "cup_id", variable)
+            ) %>%
+            dplyr::select(-is_cup_id) %>%
+            dplyr::group_by(taste_position) %>%
+            dplyr::mutate(
+              recognition_taste = max(response[variable == "recognition_taste"]),
+              recognition_taste = case_when(
+                recognition_taste == 1 ~ "nacl",
+                recognition_taste == 2 ~ "sucr",
+                recognition_taste == 3 ~ "bitt",
+                recognition_taste == 4 ~ "sour",
+                recognition_taste == 5 ~ "uman",
+                recognition_taste == 6 ~ "fatt",
+                recognition_taste == 7 ~ "none"
+              ),
+            ) %>%
+            dplyr::filter(variable != "recognition_taste") %>%
+            tidyr::spread(variable, response) %>%
+            dplyr::arrange(taste_position, cup_order))
     ) %>%
     tidyr::unnest() %>%
     dplyr::select(randomization_id = randomization_id_st, everything())
