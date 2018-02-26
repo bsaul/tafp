@@ -48,11 +48,11 @@ supra_key <- read.csv("design/randomization/supra_ids_2017-10-06.csv",
 assign(out_data_name, within(get(out_data_name), {
   
   supra_long_unblind <- supra_long_blind %>%
-    left_join(supra_key, by = c("randomization_id", "time", "taste_position", "cup_order")) %>%
+    left_join(supra_key, by = c("randomization_id", "time", "taste_position", "cup_order", "cup_id")) %>%
     dplyr::mutate(
       tasted_correct = recognition_taste == assay_taste
     ) %>% 
-    dplyr::group_by(record_id, randomization_id, taste_position) %>%
+    dplyr::group_by(record_id, randomization_id, time, taste_position) %>%
     dplyr::mutate(
       conc_rank     = rank(conc),
       response_rank = rank(response),
