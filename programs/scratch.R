@@ -1,6 +1,6 @@
 library(tasp)
 library(ggplot2)
-dt <- tasp_data("20180225")
+dt <- tasp_data("20180715")
 
 
 temp <- dt$dtrt_long_unblind %>% 
@@ -54,7 +54,7 @@ ggplot(temp,
 temp_supra <- dt$supra_long_unblind %>% 
   filter(!(randomization_id == "")) %>%
   group_by(randomization_id) 
-
+temp_supra[is.na(temp_supra$conc), ]
 ggplot(
   temp_supra,
   aes(x = conc,
