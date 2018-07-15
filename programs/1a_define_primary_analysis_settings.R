@@ -193,7 +193,14 @@ analysis_data_settings <- list(
         action       = dtrt_check_exclude_1
       )
     ),
-    post_process  = function(x) {x %>% select(-contains("complete")) }),
+    post_process  = function(x) {x %>% select(-contains("complete")) %>%
+        filter(randomization_id_rtdt != "") %>%
+        # If "R" is missing from randomization ID, add it.
+        mutate(randomization_id_rtdt = ifelse(
+          grepl("^[0-9]{3}$", randomization_id_rtdt),
+          paste0("R", randomization_id_rtdt),
+          randomization_id_rtdt)) 
+      }),
   
   # Supra threshold ####
   supra = list(
@@ -211,7 +218,13 @@ analysis_data_settings <- list(
         action       = supra_check_exclude_1
       )),
       post_process  = function(x) {x %>% select(-contains("complete")) %>%
-          filter(randomization_id_st != "")}),
+          filter(randomization_id_st != "") %>%
+          # If "R" is missing from randomization ID, add it.
+          mutate(randomization_id_st = ifelse(
+            grepl("^[0-9]{3}$", randomization_id_st),
+            paste0("R", randomization_id_st),
+            randomization_id_st)) 
+        }),
   
   # Treatment ####
   trt = list(
