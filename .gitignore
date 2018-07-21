@@ -12,3 +12,4 @@
 **token.R
 *.token
 *retrieval_logs**
+*.html
