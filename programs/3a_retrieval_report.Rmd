@@ -1,0 +1,66 @@
+---
+title: "Taste Adaptation Study Pilot - RedCap Data Retrieval Report"
+author: "Bradley Saul"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+params:
+   retrieval_date: "20180715"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tasp)
+dt <- tasp_data(params$retrieval_date)
+```
+
+Based on data retrieved from RedCap on: `r rt`
+
+```{r}
+# Number of subjects with treatment data
+trt_ids <- unique(dt$trt$record_id)
+length(trt_ids)
+
+# Number of subjects with clinical data
+cln_ids <- unique(dt$cln$record_id)
+length(cln_ids)
+
+# Number of subjects with suprathreshold data
+supra_ids <- unique(dt$supra_long_unblind$record_id)
+length(supra_ids)
+
+# Number of subjects with suprathreshold data
+dtrt_ids <- unique(dt$dtrt_long_unblind$record_id)
+length(dtrt_ids)
+```
+
+```{r}
+# Which subjects are in trt but not in supra or dtrt
+setdiff(trt_ids, supra_ids)
+setdiff(trt_ids, dtrt_ids)
+```
+
+Definition of time: 
+
+```
+        redcap_event_name == "pretreatment_arm_1"      ~ 0,
+        redcap_event_name == "day_0_arm_1"             ~ 1,
+        redcap_event_name == "day_5_arm_1"             ~ 2,
+        redcap_event_name == "final_fasting_day_arm_1" ~ 3,
+        redcap_event_name == "refeed_day_3_arm_1"      ~ 4,
+        redcap_event_name == "posttreatment_arm_1"     ~ 5
+```
+
+```{r}
+# For suprathresold, how many observations do we have for each time point
+dt$supra_long_unblind %>% ungroup() %>%
+  distinct(record_id, time) %>%
+  group_by(time) %>% tally()
+```
+
+```{r}
+# For dtrt, how many observations do we have for each time point
+dt$dtrt_long_unblind %>% ungroup() %>%
+  distinct(record_id, time) %>%
+  group_by(time) %>% tally()
+```
