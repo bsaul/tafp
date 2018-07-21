@@ -11,7 +11,7 @@ library(tasp)
 retrieve_redcap_data()
 
 ## Create primary datasets
-retrieval_date <- "20180715"
+retrieval_date <- "20180721"
 in_data_name   <- paste0("tasp_retrieval_", retrieval_date)
 out_data_name  <- paste0("tasp_data_", retrieval_date)
 
@@ -79,7 +79,22 @@ write_check_to_file(
   supra_possible,
   retrieval_date = retrieval_date)
 
-## Save and clean up
+
+## Save 
 save(list = c(out_data_name), file = paste0("data/", out_data_name, ".rda"))
+devtools::build()
+
+
+## Output report
+rmarkdown::render(
+  input  = "programs/3a_retrieval_report.Rmd",
+  output_file = sprintf("%s_retrieval_report.html", retrieval_date),
+  output_dir = "inst/retrieval_logs/",
+  params = list(
+    retrieval_date = retrieval_date
+  )
+)
+
+## Clean up
+
 rm(list = ls())
-devtools::install()
