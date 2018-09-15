@@ -14,7 +14,7 @@ library(tasp)
 dt <- tasp_data(params$retrieval_date)
 ```
 
-Based on data retrieved from RedCap on: `r rt`
+Based on data retrieved from RedCap on: `r params$retrieval_date`
 
 ```{r}
 # Number of subjects with treatment data
