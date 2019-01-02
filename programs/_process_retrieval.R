@@ -11,7 +11,7 @@ library(tasp)
 retrieve_redcap_data()
 
 ## Create primary datasets
-retrieval_date <- "20181211"
+retrieval_date <- "20190101"
 in_data_name   <- paste0("tasp_retrieval_", retrieval_date)
 out_data_name  <- paste0("tasp_data_", retrieval_date)
 
