@@ -31,18 +31,32 @@ pre_post_supra <- supra_analysis %>%
   filter(time %in% c(1, 4)) %>%
   group_by(record_id, assay_taste, conc) %>%
   arrange(time) %>%
-  summarise(pre_post_change = response[2] - response[1])
+  summarise(pre_post_change = response[time == 4] - response[time == 1])
   
 ggplot(pre_post_supra,
-       aes(x = conc, y = pre_post_change, group = record_id)) + 
-  geom_line() + 
-  facet_grid(assay_taste ~ . )
+       aes(x = conc, y = pre_post_change)) + 
+  geom_hline(yintercept = 0) + 
+  geom_point(shape = 1) +
+  geom_line(aes(group = record_id), alpha = .5) + 
+  stat_smooth(se = FALSE) + 
+  facet_grid(assay_taste ~ . ) + 
+  theme_bw() + 
+  ggtitle(
+    "Pre-post change in suprathreshold for each conc"
+  )
 
 library(geepack)
 
 hold <- geeglm(
-  response ~ time*conc + I(conc^2),
+  response ~ time + conc + I(conc^2),
   id   = record_id, 
-  data = filter(dt$supra_long_unblind, assay_taste == "nacl")
+  data = filter(supra_analysis, assay_taste == "nacl") %>% arrange(record_id)
+)
+summary(hold)
+
+hold <- geeglm(
+  response ~ time + conc + I(conc^2),
+  id   = record_id, 
+  data = filter(supra_analysis, assay_taste == "sucr") %>% arrange(record_id)
 )
 summary(hold)

@@ -1,6 +1,7 @@
 library(tasp)
 library(ggplot2)
-dt <- tasp_data("20180915")
+
+dt <- tasp_data("20190101")
 
 
 temp <- dt$dtrt_long_unblind %>% 
