@@ -13,3 +13,4 @@
 *.token
 *retrieval_logs**
 *.html
+packrat/lib*/
