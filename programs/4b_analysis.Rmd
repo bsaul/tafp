@@ -1,6 +1,8 @@
 ---
 title: "Analysis of Taste Adaptation Study"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -23,8 +25,8 @@ TODO:
 
 ```{r dtrt_bytime}
 dtrt_plot <- dtrt_thresholds %>% ungroup() %>%
-  select(-dtp, -rtp, -taste_order, -days, -hour) %>%
-  tidyr::gather(key = "type", value = "conc", -record_id, -time, -assay_taste)
+  select(-dtp, -rtp, -taste_order, -hour) %>%
+  tidyr::gather(key = "type", value = "conc", -record_id, -time, -days, -assay_taste)
 
 ggplot(
   data = dtrt_plot,
@@ -37,10 +39,34 @@ ggplot(
   ggtitle("Changes in Detection/Recognition Thresholds at Followup times")
 ```
 
+```{r dtrt_bydays}
+hold <- dtrt_plot %>%
+  filter(time %in% c(1, 4)) %>%
+  group_by(record_id, assay_taste, type) %>%
+  summarise(
+    rel_change = conc[time == 4]/conc[time == 1],
+    change = log(conc[time == 4]) - log(conc[time == 1]),
+    days   = max(days)
+  ) 
+
+ggplot(
+  data = hold,
+  aes(x = days, y = change)
+) + 
+  geom_point() + 
+  scale_y_continuous("Change in log(concentration)") + 
+  stat_smooth(method = "lm", se = FALSE) + 
+  facet_grid(assay_taste ~ type) + 
+  ggtitle(
+    "Pre-post change as function of days since start of fast"
+  )
+```
+
 ```{r dtrt_prepost}
 teststats <- dtrt_plot %>%
   filter(time %in% c(1,4)) %>%
-  group_by(record_id, assay_taste, type) %>%
+  group_by(record_id, assay_taste, type) %>% 
+  select(-days) %>%
   tidyr::spread(key = time, value = conc) %>%
   group_by(assay_taste, type) %>%
   summarise(
