@@ -1,0 +1,174 @@
+---
+title: "Analysis of Taste Adaptation Study"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+source("4a_create_analysis_datasets.r")
+```
+
+*PRELIMARY RESULTS*
+
+TODO:
+
+* Look at analysis plan in sample size simulations
+* apply small-sample corrections to models
+* consider how to treat dt/rt as a function of days since fasting
+
+
+
+## Detection/Recognition
+
+```{r dtrt_bytime}
+dtrt_plot <- dtrt_thresholds %>% ungroup() %>%
+  select(-dtp, -rtp, -taste_order, -days, -hour) %>%
+  tidyr::gather(key = "type", value = "conc", -record_id, -time, -assay_taste)
+
+ggplot(
+  data = dtrt_plot,
+  aes(x = time, y = conc)
+) + geom_point(shape = 1) +
+  geom_line(aes(group = record_id), alpha = .5) + 
+  facet_grid(assay_taste + type ~ ., scales = "free_y") + 
+  stat_smooth(method = "lm", se = FALSE) + 
+  theme_bw() +
+  ggtitle("Changes in Detection/Recognition Thresholds at Followup times")
+```
+
+```{r dtrt_prepost}
+teststats <- dtrt_plot %>%
+  filter(time %in% c(1,4)) %>%
+  group_by(record_id, assay_taste, type) %>%
+  tidyr::spread(key = time, value = conc) %>%
+  group_by(assay_taste, type) %>%
+  summarise(
+    w = wilcox.test(x = `1`, y = `4`, paired = TRUE, exact = FALSE)$p.value,
+    t = t.test(x = `1`, y = `4`, paired = TRUE)$p.value,
+    label = sprintf("Paired Wilcoxon Rank Sum: %.3f\nPaired T: %.3f", w, t)
+  ) 
+
+dtrt_prepost <- dtrt_plot %>%
+  filter(time %in% c(1,4)) %>%
+  group_by(record_id, assay_taste, type) %>%
+  summarise(change = conc[time == 4] - conc[time == 1]) 
+
+ggplot(
+  dtrt_prepost,
+  aes(x = type, y = change)
+) +
+  geom_hline(yintercept = 0) +
+  geom_boxplot() + 
+  geom_point(shape = 1) + 
+  geom_text(
+    data = teststats,
+    aes(x = type, y = -150, label = label),
+    size = 2 
+  ) + 
+  scale_x_discrete("") + 
+  facet_grid(~assay_taste) + 
+  theme_bw() + 
+  ggtitle("Paired Pre-post changes in detection (dt) and recognition (rt) thresholds for each subject by taste")
+
+```
+
+## Suprathreshold
+
+```{r supra_prepost}
+pre_post_supra <- supra_analysis %>%
+  filter(time %in% c(1, 4)) %>%
+  group_by(record_id, assay_taste, conc) %>%
+  arrange(time) %>%
+  summarise(pre_post_change = response[time == 4] - response[time == 1])
+  
+ggplot(pre_post_supra,
+       aes(x = conc, y = pre_post_change)) + 
+  geom_hline(yintercept = 0) + 
+  geom_point(shape = 1) +
+  geom_line(aes(group = record_id), alpha = .5) + 
+  stat_smooth(method = "lm", se = FALSE) + 
+  facet_grid(assay_taste ~ . ) + 
+  theme_bw() + 
+  ggtitle(
+    "Pre-post change in suprathreshold for each conc"
+  )
+```
+
+```{r supra_auc}
+ggplot(supra_auc, 
+       aes(x = time, y = auc)) + 
+  geom_point() + 
+  geom_line(aes(group = record_id), alpha = .5) + 
+  stat_smooth(method = "loess", se = FALSE) + 
+  facet_grid( ~ assay_taste) + 
+  ggtitle(
+    "Area Under Supra curve over time"
+  )
+```
+
+```{r supra_days}
+ggplot(supra_analysis, 
+       aes(x = days, y = response)) + 
+  geom_line(aes(group = record_id)) + 
+  geom_point() + 
+  facet_grid(conc ~ assay_taste) + 
+  stat_smooth(method = "loess", se = FALSE) +
+  ggtitle(
+    "Suprathresholds as a function of days since start of fast"
+  )
+```
+
+
+### Models
+
+
+
+#### NaCL
+
+```{r supra_nacl_models, echo = TRUE}
+library(geepack)
+library(lme4)
+supra_nacl <- filter(supra_analysis, assay_taste == "nacl") %>% 
+  arrange(record_id) 
+
+model_supra_nacl <- geeglm(
+  response ~ days + conc + I(conc^2),
+  id   = record_id, 
+  data = supra_nacl
+)
+summary(model_supra_nacl)
+
+## Excluding 0 conc
+model_supra_nacl <- geeglm(
+  response ~ days + conc + I(conc^2),
+  id   = record_id, 
+  data = supra_nacl %>% filter(conc != 0)
+)
+summary(model_supra_nacl)
+```
+
+#### Sucrose
+
+```{r supra_sucr_models, echo = TRUE}
+supra_sucr <- filter(supra_analysis, assay_taste == "sucr") %>%
+  arrange(record_id)
+
+model_supra_sucr <- geeglm(
+  response ~ days + conc + I(conc^2),
+  id   = record_id, 
+  data = supra_sucr
+)
+summary(model_supra_sucr)
+
+## Excluding 0 conc
+
+model_supra_sucr <- geeglm(
+  response ~ days + conc + I(conc^2),
+  id   = record_id, 
+  data = supra_sucr %>% filter(conc != 0)
+)
+summary(model_supra_sucr)
+
+```
+
