@@ -94,10 +94,14 @@ dtrt_analysis <- dt$dtrt_long_unblind %>%
   mutate(
     # See record_id == 12 at time == 2
     chose_correct_taste = if_else(is.na(recognition_taste), FALSE, chose_correct_taste)
+  )%>%
+  left_join(
+    ungroup(dtrt_datetime) %>% mutate(record_id = as.character(record_id)), 
+    by = c("record_id", "time", "taste_order")
   )
 
 dtrt_thresholds <- dtrt_analysis %>%
-  group_by(record_id, time, taste_order, assay_taste) %>%
+  group_by(record_id, time, days, taste_order, assay_taste) %>%
   summarise(
     dtp      = case_when(
       sum(chose_correct_cup)  == 10 ~ 1L,
@@ -128,11 +132,7 @@ dtrt_thresholds <- dtrt_analysis %>%
       rtp == 10L ~ max(conc),
       TRUE       ~ exp(mean(log(c(conc[rtp], conc[rtp + 1]))))
     )
-  ) %>%
-  left_join(
-    ungroup(dtrt_datetime) %>% mutate(record_id = as.character(record_id)), 
-    by = c("record_id", "time", "taste_order")
-  )
+  ) 
 
 
 

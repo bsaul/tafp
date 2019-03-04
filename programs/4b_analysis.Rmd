@@ -10,14 +10,22 @@ knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 source("4a_create_analysis_datasets.r")
 ```
-
 *PRELIMARY RESULTS*
+
+# Methods
+
+* Describe statistical models
+* Describe original power analysis
+
+
+
+# Results
 
 TODO:
 
-* Look at analysis plan in sample size simulations
-* apply small-sample corrections to models
+* start with supra threshold then DT/RT
 * consider how to treat dt/rt as a function of days since fasting
+* 
 
 
 
@@ -25,18 +33,18 @@ TODO:
 
 ```{r dtrt_bytime}
 dtrt_plot <- dtrt_thresholds %>% ungroup() %>%
-  select(-dtp, -rtp, -taste_order, -hour) %>%
+  select(-dtp, -rtp, -taste_order) %>%
   tidyr::gather(key = "type", value = "conc", -record_id, -time, -days, -assay_taste)
 
 ggplot(
   data = dtrt_plot,
-  aes(x = time, y = conc)
+  aes(x = days, y = log(conc))
 ) + geom_point(shape = 1) +
   geom_line(aes(group = record_id), alpha = .5) + 
   facet_grid(assay_taste + type ~ ., scales = "free_y") + 
   stat_smooth(method = "lm", se = FALSE) + 
   theme_bw() +
-  ggtitle("Changes in Detection/Recognition Thresholds at Followup times")
+  ggtitle("Changes in Detection/Recognition (log) Thresholds by days after fasting")
 ```
 
 ```{r dtrt_bydays}
@@ -99,6 +107,80 @@ ggplot(
 
 ```
 
+```{r}
+dt <- dtrt_analysis %>%
+  filter(time %in% c(1,4)) %>%
+  group_by(assay_taste, time, level) %>%
+  summarise(
+    dt = mean(chose_correct_cup),
+    rt = mean(chose_correct_taste)
+  ) %>%
+  tidyr::gather(key = test, value = value, -assay_taste, -time, -level)
+
+ggplot(
+  data = dt,
+  aes(x = level, y = value, color = factor(time), group = time)
+) + geom_line() + 
+  facet_grid(test ~ assay_taste) +
+  ggtitle("Proportion of subjects correctly identifying cup (dt) or taste (rt)\nat concentration levels")
+```
+
+### Models
+
+These models are first passes getting at the question: does the probability of correct cup identification increase as a function of days after fasting after controlling for concentration (which is obviously associated).
+
+#### NaCl DT
+
+```{r}
+library(lme4)
+m <- glmer(
+  chose_correct_cup ~ log(conc) + days + (1|record_id),
+  data = filter(dtrt_analysis, assay_taste == "nacl", level != 1),
+  family = binomial()
+)
+
+summary(m)
+```
+
+#### NaCl RT
+
+```{r}
+m <- glmer(
+  chose_correct_taste ~ log(conc) + days + (1|record_id),
+  data = filter(dtrt_analysis, assay_taste == "nacl", level != 1),
+  family = binomial()
+)
+
+summary(m)
+```
+
+#### Sucrose DT
+
+
+```{r}
+m <- glmer(
+  chose_correct_cup ~ log(conc) + days + (1|record_id),
+  data = filter(dtrt_analysis, assay_taste == "sucr", level != 1),
+  family = binomial()
+)
+
+summary(m)
+```
+
+#### Sucrose RT
+
+
+```{r}
+m <- glmer(
+  chose_correct_taste ~ log(conc) + days + (1|record_id),
+  data = filter(dtrt_analysis, assay_taste == "sucr", level != 1),
+  family = binomial()
+)
+
+summary(m)
+```
+
+
 ## Suprathreshold
 
 ```{r supra_prepost}
@@ -148,7 +230,45 @@ ggplot(supra_analysis,
 
 ### Models
 
+```{r}
+dt <- supra_analysis %>%
+  ungroup %>% 
+  filter(time %in% c(1, 4), conc > 0) %>%
+  mutate(
+    y = log10(response),
+    x = (time == 4) * 1,
+    t = factor(assay_taste)
+  ) %>%
+  select(y, x, t, c = conc, id = record_id) %>%
+  arrange(id)
 
+geex_correct <- function(data, model){
+  f <- geex::grab_psiFUN(object = model, data = data)
+  function(theta){
+    f(theta)
+  }
+}
+
+
+dt
+m  <- geepack::geeglm(y ~ -1 + factor(t) + factor(t):x + factor(t):log10(c), id = id, data = dt, 
+                      family = gaussian(link = 'identity'))
+m
+# glist <- list(splitdt = split(dt, f = dt$id), eeFUN = geex_correct)
+library(geex)
+ge <- m_estimate(
+  data = dt,
+  units     = 'id',
+  estFUN     = geex_correct,
+  outer_args = list(model = m),
+  corrections = list(fay = correction(FUN = fay_bias_correction,
+                                      b = 0.75)),
+  compute_roots  = FALSE,
+  roots     = coef(m))
+
+ge@estimates - qnorm(.95) * sqrt(diag(ge@corrections$fay))
+ge@estimates + qnorm(.95) * sqrt(diag(ge@corrections$fay))
+```
 
 #### NaCL
 
