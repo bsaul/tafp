@@ -1,6 +1,6 @@
 PackratFormat: 1.4
 PackratVersion: 0.4.9.3
-RVersion: 3.5.1
+RVersion: 3.5.2
 Repos: CRAN=https://cran.rstudio.com/
 
 Package: BH
@@ -78,10 +78,10 @@ Hash: 65f62365ec69ddd17230d2ffe891a6ab
 
 Package: dplyr
 Source: CRAN
-Version: 0.7.8
-Hash: c965954fb9a071cb0e5194528223aa72
-Requires: BH, R6, Rcpp, assertthat, bindrcpp, glue, magrittr,
-    pkgconfig, plogr, rlang, tibble, tidyselect
+Version: 0.8.0.1
+Hash: a6547ccd9975f65dac0e46ce4b4e324e
+Requires: BH, R6, Rcpp, assertthat, glue, magrittr, pkgconfig, plogr,
+    rlang, tibble, tidyselect
 
 Package: evaluate
 Source: CRAN
@@ -271,13 +271,6 @@ Source: CRAN
 Version: 2.0.1
 Hash: d2a00b9a314cfad8f6b51e2c97aaff5c
 Requires: cli, crayon, fansi, pillar, pkgconfig, rlang
-
-Package: tidyr
-Source: CRAN
-Version: 0.8.2
-Hash: 9ff92b9b3c11dfcd94d179b75b85c668
-Requires: Rcpp, dplyr, glue, magrittr, purrr, rlang, stringi, tibble,
-    tidyselect
 
 Package: tidyselect
 Source: CRAN
