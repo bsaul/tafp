@@ -3,245 +3,103 @@ title: "Analysis of Taste Adaptation Study"
 output: html_document
 editor_options: 
   chunk_output_type: console
+bibliography: 4b_analysis.bib
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
+library(geepack)
+# library(lme4)
+library(geex)
 source("4a_create_analysis_datasets.r")
 ```
 *PRELIMARY RESULTS*
 
 # Methods
 
-* Describe statistical models
-* Describe original power analysis
+## Outcomes
 
+* primary: changes in suprathreshold intensity
+* secondary: changes in detection and recognition thresholds
 
+## Sample Size and Power
+
+The sample size for this pilot study was based on a model-based simulation study of changes in suprathreshold intensity from day 0 to day 5 of fasting. The target of the simulation was estimating 90\% confidence intervals instead of power. This approach for justifying pilot study sample size is recommended when little is known about the parameter(s) of interest over a hypothesis testing approach [@hertzog2008, @moore2011, @lee2014] (Hertzog 2008; Moore et al. 2011; Lee et al. 2014).
+
+## Statistical Analysis
+
+For analysis of suprathreshold intensities, we excluded the zero concentrations as only `r supra_analysis %>% filter(conc ==0, response > 0 ) %>% nrow()` of the `r supra_analysis %>% filter(conc ==0) %>% nrow()` tests had a value other than zero at this concentration. The mean and standard deviation of responses were computed for each assay, concentration, and time point. To estimate the marginal effect of days since start of fast on suprathrehold intensity, a Generalized Estimating Equation (GEE) [@liang1986] model of $log(1 + \text{response})$ was fit with terms for days since start of fast, $log_{10}(\text{concentration})$, and their interaction. Models were fit separately within each taste. Model estimates were transformed back to the original scale are presented with point-wise 90\% confidence intervals.
+
+Statistical analyses were done in `r R.version.string` [@rcore] using the geepack [@geepack], geex [@geex], and ggplot2 [@ggplot2] packages.
+
+TODO: Recognition and Detection thresholds
 
 # Results
 
-TODO:
+TODO: describe subject characteristics 
 
-* start with supra threshold then DT/RT
-* consider how to treat dt/rt as a function of days since fasting
-* 
-
-
-
-## Detection/Recognition
-
-```{r dtrt_bytime}
-dtrt_plot <- dtrt_thresholds %>% ungroup() %>%
-  select(-dtp, -rtp, -taste_order) %>%
-  tidyr::gather(key = "type", value = "conc", -record_id, -time, -days, -assay_taste)
-
-ggplot(
-  data = dtrt_plot,
-  aes(x = days, y = log(conc))
-) + geom_point(shape = 1) +
-  geom_line(aes(group = record_id), alpha = .5) + 
-  facet_grid(assay_taste + type ~ ., scales = "free_y") + 
-  stat_smooth(method = "lm", se = FALSE) + 
-  theme_bw() +
-  ggtitle("Changes in Detection/Recognition (log) Thresholds by days after fasting")
+```{r study_n}
+counts <- supra_analysis %>%
+  ungroup() %>%
+  distinct(record_id, time) %>%
+  group_by(time) %>%
+  count()
 ```
 
-```{r dtrt_bydays}
-hold <- dtrt_plot %>%
-  filter(time %in% c(1, 4)) %>%
-  group_by(record_id, assay_taste, type) %>%
-  summarise(
-    rel_change = conc[time == 4]/conc[time == 1],
-    change = log(conc[time == 4]) - log(conc[time == 1]),
-    days   = max(days)
-  ) 
+All subjects completed the assays at the start of fast, day 5, and end of fast + 3 days. Only `r counts$n[3]` subjects completed the assays at the end of fast timepoint.
 
-ggplot(
-  data = hold,
-  aes(x = days, y = change)
-) + 
-  geom_point() + 
-  scale_y_continuous("Change in log(concentration)") + 
-  stat_smooth(method = "lm", se = FALSE) + 
-  facet_grid(assay_taste ~ type) + 
-  ggtitle(
-    "Pre-post change as function of days since start of fast"
-  )
-```
+## Change in Supratheshold Intensity
 
-```{r dtrt_prepost}
-teststats <- dtrt_plot %>%
-  filter(time %in% c(1,4)) %>%
-  group_by(record_id, assay_taste, type) %>% 
-  select(-days) %>%
-  tidyr::spread(key = time, value = conc) %>%
-  group_by(assay_taste, type) %>%
-  summarise(
-    w = wilcox.test(x = `1`, y = `4`, paired = TRUE, exact = FALSE)$p.value,
-    t = t.test(x = `1`, y = `4`, paired = TRUE)$p.value,
-    label = sprintf("Paired Wilcoxon Rank Sum: %.3f\nPaired T: %.3f", w, t)
-  ) 
+Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period. Responses are highly variable between subjects (Table `\@ref(table11)`), but show a general trend of increasing response to salt and descreasing response to sweet. The GEE model fit shows a similar trend.
 
-dtrt_prepost <- dtrt_plot %>%
-  filter(time %in% c(1,4)) %>%
-  group_by(record_id, assay_taste, type) %>%
-  summarise(change = conc[time == 4] - conc[time == 1]) 
-
-ggplot(
-  dtrt_prepost,
-  aes(x = type, y = change)
-) +
-  geom_hline(yintercept = 0) +
-  geom_boxplot() + 
-  geom_point(shape = 1) + 
-  geom_text(
-    data = teststats,
-    aes(x = type, y = -150, label = label),
-    size = 2 
-  ) + 
-  scale_x_discrete("") + 
-  facet_grid(~assay_taste) + 
-  theme_bw() + 
-  ggtitle("Paired Pre-post changes in detection (dt) and recognition (rt) thresholds for each subject by taste")
-
-```
-
-```{r}
-dt <- dtrt_analysis %>%
-  filter(time %in% c(1,4)) %>%
-  group_by(assay_taste, time, level) %>%
-  summarise(
-    dt = mean(chose_correct_cup),
-    rt = mean(chose_correct_taste)
-  ) %>%
-  tidyr::gather(key = test, value = value, -assay_taste, -time, -level)
-
-ggplot(
-  data = dt,
-  aes(x = level, y = value, color = factor(time), group = time)
-) + geom_line() + 
-  facet_grid(test ~ assay_taste) +
-  ggtitle("Proportion of subjects correctly identifying cup (dt) or taste (rt)\nat concentration levels")
-```
-
-### Models
-
-These models are first passes getting at the question: does the probability of correct cup identification increase as a function of days after fasting after controlling for concentration (which is obviously associated).
-
-#### NaCl DT
-
-```{r}
-library(lme4)
-m <- glmer(
-  chose_correct_cup ~ log(conc) + days + (1|record_id),
-  data = filter(dtrt_analysis, assay_taste == "nacl", level != 1),
-  family = binomial()
-)
-
-summary(m)
-```
-
-#### NaCl RT
-
-```{r}
-m <- glmer(
-  chose_correct_taste ~ log(conc) + days + (1|record_id),
-  data = filter(dtrt_analysis, assay_taste == "nacl", level != 1),
-  family = binomial()
-)
-
-summary(m)
-```
-
-#### Sucrose DT
-
-
-```{r}
-m <- glmer(
-  chose_correct_cup ~ log(conc) + days + (1|record_id),
-  data = filter(dtrt_analysis, assay_taste == "sucr", level != 1),
-  family = binomial()
-)
-
-summary(m)
-```
-
-#### Sucrose RT
-
-
-```{r}
-m <- glmer(
-  chose_correct_taste ~ log(conc) + days + (1|record_id),
-  data = filter(dtrt_analysis, assay_taste == "sucr", level != 1),
-  family = binomial()
-)
-
-summary(m)
-```
-
-
-## Suprathreshold
-
-```{r supra_prepost}
-pre_post_supra <- supra_analysis %>%
-  filter(time %in% c(1, 4)) %>%
-  group_by(record_id, assay_taste, conc) %>%
-  arrange(time) %>%
-  summarise(pre_post_change = response[time == 4] - response[time == 1])
-  
-ggplot(pre_post_supra,
-       aes(x = conc, y = pre_post_change)) + 
-  geom_hline(yintercept = 0) + 
-  geom_point(shape = 1) +
-  geom_line(aes(group = record_id), alpha = .5) + 
-  stat_smooth(method = "lm", se = FALSE) + 
-  facet_grid(assay_taste ~ . ) + 
-  theme_bw() + 
-  ggtitle(
-    "Pre-post change in suprathreshold for each conc"
-  )
-```
-
-```{r supra_auc}
-ggplot(supra_auc, 
-       aes(x = time, y = auc)) + 
-  geom_point() + 
-  geom_line(aes(group = record_id), alpha = .5) + 
-  stat_smooth(method = "loess", se = FALSE) + 
-  facet_grid( ~ assay_taste) + 
-  ggtitle(
-    "Area Under Supra curve over time"
-  )
-```
-
-```{r supra_days}
-ggplot(supra_analysis, 
-       aes(x = days, y = response)) + 
-  geom_line(aes(group = record_id)) + 
-  geom_point() + 
-  facet_grid(conc ~ assay_taste) + 
-  stat_smooth(method = "loess", se = FALSE) +
-  ggtitle(
-    "Suprathresholds as a function of days since start of fast"
-  )
-```
-
-
-### Models
-
-```{r}
-dt <- supra_analysis %>%
+```{r supra_table, results = 'asis'}
+supra_analysis %>%
   ungroup %>% 
-  filter(time %in% c(1, 4), conc > 0) %>%
-  mutate(
-    y = log10(response),
-    x = (time == 4) * 1,
-    t = factor(assay_taste)
+  filter(conc > 0) %>%
+  group_by(assay_taste, conc, time) %>%
+  summarise(
+    x = sprintf("%.1f (%.2f)", mean(response), sd(response))
+  ) %>% 
+  tidyr::spread(
+    key = time,
+    value = x
   ) %>%
-  select(y, x, t, c = conc, id = record_id) %>%
-  arrange(id)
+  ungroup() %>%
+  mutate(
+   assay_taste = factor(
+      assay_taste, 
+       levels = c("nacl", "sucr"),
+       labels = c("NaCL", "Sucrose")),
+  ) %>%
+  knitr::kable(
+    align = c("l", "l", rep("c", 4)),
+    col.names = c("Assay", "Concentration", 
+                  paste(c("Start of Fast",
+                          "Day 5", "End of fast", "End of fast + 3 days"),
+                        paste0("(n=", counts$n, ")"))),
+    caption = "Mean (Standard deviation) of Suprathreshold repsonses at timepoints"
+  )
+  
 
+```
+
+```{r supra_model_dt}
+supra_model_dt <- supra_analysis %>%
+  ungroup %>% 
+  filter(conc > 0) %>%
+  mutate(
+    y = log1p(response),
+  ) %>%
+  select(y, days, assay_taste, time, c = conc, id = record_id) %>%
+  arrange(id) %>%
+  group_nest(assay_taste) %>%
+  mutate(
+    data_pre_to_5 = purrr::map(data, ~ .x %>% filter(time %in% c(1, 2)) )
+  )
+```
+
+```{r supra_model}
 geex_correct <- function(data, model){
   f <- geex::grab_psiFUN(object = model, data = data)
   function(theta){
@@ -249,72 +107,266 @@ geex_correct <- function(data, model){
   }
 }
 
+gee_fit1 <- function(data){
+  geepack::geeglm(
+    formula = y ~ days * log10(c),
+    id   = id,
+    data = data, 
+    family = gaussian(link = 'identity'))
+}
 
-dt
-m  <- geepack::geeglm(y ~ -1 + factor(t) + factor(t):x + factor(t):log10(c), id = id, data = dt, 
-                      family = gaussian(link = 'identity'))
-m
-# glist <- list(splitdt = split(dt, f = dt$id), eeFUN = geex_correct)
-library(geex)
-ge <- m_estimate(
-  data = dt,
-  units     = 'id',
-  estFUN     = geex_correct,
-  outer_args = list(model = m),
-  corrections = list(fay = correction(FUN = fay_bias_correction,
-                                      b = 0.75)),
-  compute_roots  = FALSE,
-  roots     = coef(m))
+mest <- function(fitter, data){
+  m <- fitter(data)
+  m_estimate(
+    data        = data,
+    units       = 'id',
+    estFUN      = geex_correct,
+    outer_args  = list(model = m),
+    corrections = list(fay = correction(
+      FUN = fay_bias_correction,
+      b   = 0.75)),
+    compute_roots  = FALSE,
+    roots     = coef(m))
+}
 
-ge@estimates - qnorm(.95) * sqrt(diag(ge@corrections$fay))
-ge@estimates + qnorm(.95) * sqrt(diag(ge@corrections$fay))
+get_est <- function(fit, conc = c(50, 100, 200)){
+  se <- sqrt(diag(geex::vcov(fit)))
+  # se <- sqrt(diag(fit@corrections$fay))
+  entries <- expand.grid(
+    days = 0:17, 
+    conc = conc)
+  
+  L <- function(d, c){
+    c(1, d, log10(c), d * log10(c))
+  }
+  
+  cbind(
+    entries, 
+    est = apply(entries, 1, function(x){ coef(fit) %*% L(x[1], x[2])}),
+    se  = sqrt(apply(entries, 1, function(x){ t(L(x[1], x[2])) %*% vcov(fit) %*% L(x[1], x[2])}))
+  )
+}
+
+supra_model_dt %>%
+  mutate(
+    fit_alldays = purrr::map(
+      .x = data,
+      .f = ~ mest(gee_fit1, .x)),
+    est_alldays = purrr::map2(
+      .x = fit_alldays, 
+      .y = assay_taste,
+      .f = ~ {
+        if(.y == "sucr") {
+          get_est(.x, conc = c(100, 200, 400))
+        } else {
+          get_est(.x)
+        } })
+  ) %>%
+  select(
+    assay_taste, est_alldays
+  ) %>%
+  tidyr::unnest() %>%
+  mutate(
+    conf_lo = est - qnorm(.9) * se,
+    conf_hi = est + qnorm(.9) * se,
+    est     = expm1(est),
+    conf_lo = expm1(conf_lo),
+    conf_hi = expm1(conf_hi)
+  ) -> 
+  supra_model_res
 ```
 
-#### NaCL
 
-```{r supra_nacl_models, echo = TRUE}
-library(geepack)
-library(lme4)
-supra_nacl <- filter(supra_analysis, assay_taste == "nacl") %>% 
-  arrange(record_id) 
+```{r supra_days}
+supra_plot <- supra_analysis %>%
+  filter(conc != 0) %>%
+  ungroup() %>%
+  mutate(
+    assay_taste = factor(
+      assay_taste, 
+       levels = c("nacl", "sucr"),
+       labels = c("NaCL", "Sucrose")),
+    conc_label  = factor(
+      conc, 
+      levels = sort(unique(conc)),
+      labels = sprintf("%s mg/L", sort(unique(conc))),
+      ordered = TRUE)
+  )
 
-model_supra_nacl <- geeglm(
-  response ~ days + conc + I(conc^2),
-  id   = record_id, 
-  data = supra_nacl
-)
-summary(model_supra_nacl)
+conc_labs <- distinct(supra_plot, assay_taste, conc, conc_rank, conc_label)
 
-## Excluding 0 conc
-model_supra_nacl <- geeglm(
-  response ~ days + conc + I(conc^2),
-  id   = record_id, 
-  data = supra_nacl %>% filter(conc != 0)
-)
-summary(model_supra_nacl)
+supra_model_plot <- supra_model_res %>%
+    mutate(
+      assay_taste = factor(
+        assay_taste, 
+         levels = c("nacl", "sucr"),
+         labels = c("NaCL", "Sucrose"))
+    ) %>% 
+  left_join(
+    conc_labs,
+    by = c("assay_taste", "conc")
+  )
 ```
 
-#### Sucrose
-
-```{r supra_sucr_models, echo = TRUE}
-supra_sucr <- filter(supra_analysis, assay_taste == "sucr") %>%
-  arrange(record_id)
-
-model_supra_sucr <- geeglm(
-  response ~ days + conc + I(conc^2),
-  id   = record_id, 
-  data = supra_sucr
-)
-summary(model_supra_sucr)
-
-## Excluding 0 conc
-
-model_supra_sucr <- geeglm(
-  response ~ days + conc + I(conc^2),
-  id   = record_id, 
-  data = supra_sucr %>% filter(conc != 0)
-)
-summary(model_supra_sucr)
-
+```{r supra_plot}
+ggplot(supra_plot, 
+       aes(x = days, y = response)) + 
+  geom_hline(
+    yintercept = 0, color = "grey50", size = 0.5
+  ) +
+  geom_line(
+    aes(group = record_id),
+    color = "grey80",
+    size = .3) + 
+  geom_point(
+    color = "grey80",
+    size = 0.3
+  ) + 
+  geom_line(
+    data = supra_model_plot,
+    aes(x = days, y = est, color = assay_taste),
+    inherit.aes = FALSE
+  ) + 
+  geom_ribbon(
+    data = supra_model_plot,
+    aes(x = days, ymin = conf_lo, ymax = conf_hi, fill = assay_taste),
+    alpha = 0.25,
+    inherit.aes = FALSE
+  ) + 
+  geom_text(
+    data = conc_labs,
+    aes(x = 10, y = 5, label = conc_label),
+    hjust = 0, size = 2.5, color = "grey40"
+  ) + 
+  facet_grid(assay_taste ~ conc_rank) + 
+  # stat_smooth(
+  #   aes(color = assay_taste),
+  #   method = "lm", se = FALSE,
+  #   size = 0.5) +
+  scale_y_continuous(
+    expand = c(0, 0)
+  ) + 
+  scale_color_manual(
+    guide = FALSE,
+    values = c("#7b4244", "#60e9dc")
+  ) +
+  scale_fill_manual(
+    guide = FALSE,
+    values = c("#7b4244", "#60e9dc")
+  ) +
+  labs(
+    title = "Changes in suprathreshold intensity",
+    x = "Days since start of fast",
+    y = "Response",
+    caption = "Each line is a single subject's trajectory.\nColored lines show GEE model fit with pointwise 90% confidence intervals."
+  ) + 
+  theme_classic() +
+  theme(
+    strip.background = element_blank(),
+    # strip.background.y = element_blank(),
+    strip.text.x  = element_blank(), 
+    strip.text.y  = element_text(angle = 0),
+    axis.line.x   = element_blank(),
+    axis.line.y   = element_line(color = "grey50", size = 0.5),
+    axis.ticks.y  = element_line(color = "grey50", size = 0.1),
+    axis.ticks.x  = element_line(color = "grey50", size = 0.1),
+    axis.text     = element_text(size = 6),
+    axis.title.y  = element_text(size = 8),
+    axis.title.x  = element_text(size = 8),
+    plot.caption  = element_text(size = 6)
+  )
 ```
+
+## Changes in Detection/Recognition Thresholds
+
+
+
+```{r dtrt_bytime}
+dtrt_dt <- dtrt_thresholds %>% 
+  ungroup() %>%
+  select(-dtp, -rtp, -taste_order) %>%
+  tidyr::gather(key = "type", value = "conc", 
+                -record_id, -time, -days, -assay_taste) %>%
+  mutate(
+    assay_taste = factor(
+        assay_taste, 
+         levels = c("nacl", "sucr"),
+         labels = c("NaCL", "Sucrose")),
+    type = factor(
+      type,
+      levels = c("dt", "rt"),
+      labels = c("Detection", "Recognition")
+    )
+  ) %>%
+  group_by(assay_taste, type, record_id) %>%
+  arrange(time, .by_group = TRUE) %>%
+  mutate(
+    conc2 = log1p(conc) - lag(log1p(conc), default = NA)
+  )
+```
+
+```{r dtrt_table}
+dtrt_dt %>%
+  group_by(assay_taste, time, type) %>%
+  summarise(
+    x = sprintf("%.1f (%.2f)", mean(conc), sd(conc))
+  ) %>% 
+  tidyr::spread(
+    key = time,
+    value = x
+  ) %>%
+  knitr::kable(
+    align = c("l", "l", rep("c", 4)),
+    col.names = c("Assay", "Threshold", 
+                  "Start of Fast",
+                   "Day 5", "End of fast", "End of fast + 3 days"),
+    caption = "Mean (Standard deviation) of thresholds at study timepoints"
+  )
+```
+
+```{r dtrt_plot}
+ggplot(
+  data = dtrt_dt,
+  aes(x = days, y = log1p(conc))
+) + 
+  geom_hline(
+    yintercept = 0, color = "grey50", size = 0.5
+  ) +
+  geom_point(
+    color = "grey80",
+    size = 0.8,
+    position = position_dodge(width = 1)
+  ) + 
+  geom_line(aes(group = record_id), alpha = .5) + 
+  stat_smooth(
+    aes(color = assay_taste), 
+    method = "loess", se = FALSE) + 
+  scale_color_manual(
+    guide = FALSE,
+    values = c("#7b4244", "#60e9dc")
+  ) +
+  facet_grid(assay_taste ~ type, scales = "free_y") + 
+  labs(
+    title = "Changes in Detection/Recognition Thresholds",
+    x = "Days since start of fast"
+  ) + 
+  theme_classic() +
+  theme(
+    strip.background = element_blank(),
+    # strip.background.y = element_blank(),
+    strip.text.x  = element_blank(), 
+    strip.text.y  = element_text(angle = 0),
+    axis.line.x   = element_blank(),
+    axis.line.y   = element_line(color = "grey50", size = 0.5),
+    axis.ticks.y  = element_line(color = "grey50", size = 0.1),
+    axis.ticks.x  = element_line(color = "grey50", size = 0.1),
+    axis.text     = element_text(size = 6),
+    axis.title.y  = element_text(size = 8),
+    axis.title.x  = element_text(size = 8),
+    plot.caption  = element_text(size = 6)
+  )
+```
+
+
+# References
 
