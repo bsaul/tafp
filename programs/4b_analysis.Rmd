@@ -327,7 +327,7 @@ dtrt_dt %>%
 ```{r dtrt_plot}
 ggplot(
   data = dtrt_dt,
-  aes(x = days, y = log1p(conc))
+  aes(x = days, y = log10(conc))
 ) + 
   geom_hline(
     yintercept = 0, color = "grey50", size = 0.5
@@ -340,7 +340,7 @@ ggplot(
   geom_line(aes(group = record_id), alpha = .5) + 
   stat_smooth(
     aes(color = assay_taste), 
-    method = "loess", se = FALSE) + 
+    method = "lm", se = FALSE) + 
   scale_color_manual(
     guide = FALSE,
     values = c("#7b4244", "#60e9dc")
@@ -354,7 +354,7 @@ ggplot(
   theme(
     strip.background = element_blank(),
     # strip.background.y = element_blank(),
-    strip.text.x  = element_blank(), 
+    # strip.text.x  = element_blank(), 
     strip.text.y  = element_text(angle = 0),
     axis.line.x   = element_blank(),
     axis.line.y   = element_line(color = "grey50", size = 0.5),
