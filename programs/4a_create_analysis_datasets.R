@@ -134,5 +134,11 @@ dtrt_thresholds <- dtrt_analysis %>%
     )
   ) 
 
+## Clinical data ####
 
+clinical <- dt$cln %>%
+  filter(record_id %in% study_subjects) 
 
+# ## Treamtent data ###
+# dt$trt %>%
+#   filter(record_id %in% study_subjects) 

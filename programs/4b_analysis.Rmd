@@ -25,15 +25,17 @@ source("4a_create_analysis_datasets.r")
 
 ## Sample Size and Power
 
-The sample size for this pilot study was based on a model-based simulation study of changes in suprathreshold intensity from day 0 to day 5 of fasting. The target of the simulation was estimating 90\% confidence intervals instead of power. This approach for justifying pilot study sample size is recommended when little is known about the parameter(s) of interest over a hypothesis testing approach [@hertzog2008, @moore2011, @lee2014] (Hertzog 2008; Moore et al. 2011; Lee et al. 2014).
+The sample size for this pilot study was based on a model-based simulation study of changes in suprathreshold intensity from day 0 to day 5 of fasting. The target of the simulation was estimating 90\% confidence intervals instead of power. This approach for justifying pilot study sample size is recommended when little is known about the parameter(s) of interest over a hypothesis testing approach [@hertzog2008; @moore2011; @lee2014].
 
-## Statistical Analysis
+## Statistical Analyses
+
+Demographics, baseline characteristics, and fasting lengths were described by appropriate statistical and graphical summaries.
 
 For analysis of suprathreshold intensities, we excluded the zero concentrations as only `r supra_analysis %>% filter(conc ==0, response > 0 ) %>% nrow()` of the `r supra_analysis %>% filter(conc ==0) %>% nrow()` tests had a value other than zero at this concentration. The mean and standard deviation of responses were computed for each assay, concentration, and time point. To estimate the marginal effect of days since start of fast on suprathrehold intensity, a Generalized Estimating Equation (GEE) [@liang1986] model of $log(1 + \text{response})$ was fit with terms for days since start of fast, $log_{10}(\text{concentration})$, and their interaction. Models were fit separately within each taste. Model estimates were transformed back to the original scale are presented with point-wise 90\% confidence intervals.
 
-Statistical analyses were done in `r R.version.string` [@rcore] using the geepack [@geepack], geex [@geex], and ggplot2 [@ggplot2] packages.
+Recognition and detection thresholds were summarized by mean and standard deviations for each assay and time point. TODO: modelling
 
-TODO: Recognition and Detection thresholds
+Statistical analyses were done in `r R.version.string` [@rcore] using the geepack [@geepack], geex [@geex], and ggplot2 [@ggplot2] packages.
 
 # Results
 
@@ -49,9 +51,36 @@ counts <- supra_analysis %>%
 
 All subjects completed the assays at the start of fast, day 5, and end of fast + 3 days. Only `r counts$n[3]` subjects completed the assays at the end of fast timepoint.
 
-## Change in Supratheshold Intensity
+```{r, results = "asis"}
+fast_length <- supra_analysis %>% 
+  ungroup() %>%
+  select(record_id, time, days) %>%
+  filter(time == 4) %>%
+  group_by(record_id) %>%
+  summarise(fast_length = max(days) - 3)
 
-Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period. Responses are highly variable between subjects (Table `\@ref(table11)`), but show a general trend of increasing response to salt and descreasing response to sweet. The GEE model fit shows a similar trend.
+clinical_summary <- clinical %>%
+  filter(time == 1) %>%
+  select(record_id, height, weight, bmi, 
+         systolic_blood_pressure, diastolic_blood_pressure) %>%
+  left_join(
+    fast_length, by = "record_id"
+  )
+
+clinical_summary %>%
+  tidyr::gather(key = "key", value = "value", -record_id) %>%
+  group_by(key) %>%
+  summarise(
+    mean  = mean(value),
+    median = median(value),
+    sd     = sd(value),
+    iqr    = IQR(value)
+  ) %>%
+  knitr::kable()
+
+```
+
+## Changes in Supratheshold Intensity
 
 ```{r supra_table, results = 'asis'}
 supra_analysis %>%
@@ -136,6 +165,7 @@ get_est <- function(fit, conc = c(50, 100, 200)){
     days = 0:17, 
     conc = conc)
   
+  # Estimates at a given day
   L <- function(d, c){
     c(1, d, log10(c), d * log10(c))
   }
@@ -161,7 +191,9 @@ supra_model_dt %>%
         } else {
           get_est(.x)
         } })
-  ) %>%
+  ) -> supra_fits
+
+supra_fits %>%
   select(
     assay_taste, est_alldays
   ) %>%
@@ -174,7 +206,23 @@ supra_model_dt %>%
     conf_hi = expm1(conf_hi)
   ) -> 
   supra_model_res
+
+
+# TODO: obtain confidence intervals
+supra_changes <- supra_model_res %>%
+  filter(days %in% c(0, 10)) %>%
+  group_by(
+    assay_taste, conc
+  ) %>%
+  summarise(
+    diff    = est[2] - est[1]
+  )
+
+supra_nacl_changes <- filter(supra_changes, assay_taste == "nacl") %>% pull(diff)
+supra_sucr_changes <- filter(supra_changes, assay_taste == "sucr") %>% pull(diff)
 ```
+
+Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of increasing response to salt and descreasing response to sweet. For example, the GEE model estimates that after 10 days of fasting the average salt taste response increases by `r supra_nacl_changes%>% round(2) %>% glue::glue_collapse(sep = ", ", last = ", and ")` for the 50, 100, and 200 mg/L concentrations, respectively. Over the same time span, the average sweet taste response is estimated to change by `r supra_sucr_changes %>% round(2) %>% glue::glue_collapse(sep = ", ", last = ", and ")` for each concentration respectively. 
 
 
 ```{r supra_days}
@@ -208,7 +256,7 @@ supra_model_plot <- supra_model_res %>%
   )
 ```
 
-```{r supra_plot}
+```{r supra_plot , fig.height = 5, fig.width= 8}
 ggplot(supra_plot, 
        aes(x = days, y = response)) + 
   geom_hline(
@@ -281,6 +329,7 @@ ggplot(supra_plot,
 
 
 
+
 ```{r dtrt_bytime}
 dtrt_dt <- dtrt_thresholds %>% 
   ungroup() %>%
@@ -305,6 +354,15 @@ dtrt_dt <- dtrt_thresholds %>%
   )
 ```
 
+```{r, eval = FALSE}
+library(mixor)
+
+dt <- dtrt_thresholds %>%
+  filter(assay_taste == "sucr")
+test <- mixor(rtp ~ days, id = record_id, data = dt)
+summary(test)
+```
+
 ```{r dtrt_table}
 dtrt_dt %>%
   group_by(assay_taste, time, type) %>%
@@ -324,7 +382,7 @@ dtrt_dt %>%
   )
 ```
 
-```{r dtrt_plot}
+```{r dtrt_plot, fig.height = 5, fig.width= 8}
 ggplot(
   data = dtrt_dt,
   aes(x = days, y = log10(conc))
@@ -337,7 +395,10 @@ ggplot(
     size = 0.8,
     position = position_dodge(width = 1)
   ) + 
-  geom_line(aes(group = record_id), alpha = .5) + 
+  geom_line(
+    aes(group = record_id), 
+    color = "grey80",
+    alpha = .5) + 
   stat_smooth(
     aes(color = assay_taste), 
     method = "lm", se = FALSE) + 
