@@ -42,7 +42,8 @@ Statistical analyses were done in `r R.version.string` [@rcore] using the geepac
 TODO: describe subject characteristics 
 
 ```{r study_n}
-counts <- supra_analysis %>%
+counts <- 
+  supra_analysis %>%
   ungroup() %>%
   distinct(record_id, time) %>%
   group_by(time) %>%
@@ -52,31 +53,48 @@ counts <- supra_analysis %>%
 All subjects completed the assays at the start of fast, day 5, and end of fast + 3 days. Only `r counts$n[3]` subjects completed the assays at the end of fast timepoint.
 
 ```{r, results = "asis"}
-fast_length <- supra_analysis %>% 
+fast_length <- 
+  supra_analysis %>% 
   ungroup() %>%
   select(record_id, time, days) %>%
   filter(time == 4) %>%
   group_by(record_id) %>%
   summarise(fast_length = max(days) - 3)
 
-clinical_summary <- clinical %>%
+clinical_summary <- 
+  clinical %>%
   filter(time == 1) %>%
-  select(record_id, height, weight, bmi, 
-         systolic_blood_pressure, diastolic_blood_pressure) %>%
+  select(
+    record_id, height, weight, bmi, 
+    systolic_blood_pressure, diastolic_blood_pressure
+  ) %>%
   left_join(
     fast_length, by = "record_id"
+  ) %>%
+  left_join(
+    demographics, by = "record_id"
+  ) 
+
+fvars <- 
+  clinical_summary %>%
+  select_if(is.factor) %>%
+  summarise_all(
+    .funs = list(tab = ~ list(table(.)))
   )
 
 clinical_summary %>%
+  select_if(is.numeric) %>%
   tidyr::gather(key = "key", value = "value", -record_id) %>%
   group_by(key) %>%
   summarise(
-    mean  = mean(value),
-    median = median(value),
-    sd     = sd(value),
-    iqr    = IQR(value)
+    mean   = mean(value, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    sd     = sd(value, na.rm = TRUE),
+    iqr    = IQR(value, na.rm = TRUE)
   ) %>%
-  knitr::kable()
+  knitr::kable(
+    digits = 2
+  )
 
 ```
 
@@ -114,7 +132,8 @@ supra_analysis %>%
 ```
 
 ```{r supra_model_dt}
-supra_model_dt <- supra_analysis %>%
+supra_model_dt <-
+  supra_analysis %>%
   ungroup %>% 
   filter(conc > 0) %>%
   mutate(
@@ -427,6 +446,115 @@ ggplot(
     plot.caption  = element_text(size = 6)
   )
 ```
+
+## Changes in food-liking 
+
+```{r}
+flq_completed <- 
+  foodliking %>%
+  filter(complete.cases(.)) %>%
+  group_by(record_id) %>%
+  filter(n() == 2) 
+```
+
+There were `r length(unique(flq_completed$record_id))` subjects who completed the food-liking questionnaire both before and after the exposure time.
+
+TODO: describe the scoring
+
+Figure XX shows the changes in food-liking.
+
+```{r}
+flq_plot <-
+  flq_completed %>%
+  tidyr::pivot_longer(
+    cols = ends_with("flq")
+  ) %>%
+  mutate(
+    name = stringr::str_remove(name, "_flq"),
+    name = factor(name, levels = c("salt", "sweet", "fatsalt", "fatsweet"),
+                  labels = c("Salt", "Sweet", "Fat & Salt", "Fat & Sweet"))
+  ) 
+
+hold <- flq_plot %>%
+  tidyr::pivot_wider(
+    id_cols = c("record_id", "name"),
+    names_from = "time"
+  ) %>%
+  ungroup() %>%
+  group_nest(name) %>%
+  mutate(
+    ttest = purrr::map(
+      .x = data,
+      .f = ~ t.test(.x$`0`, .x$`5`, paired = TRUE)
+    ),
+    tpval = purrr::map_dbl(ttest, "p.value"),
+    ttext = sprintf("Paired t-test p-value: %.3f", tpval)
+  )
+
+flq_plot %>%
+  ggplot(
+    data = .,
+    aes(x = time, y = value, color = name)
+  ) + 
+  geom_hline(
+    yintercept = 0,
+    color = "grey50"
+  ) + 
+  geom_point(
+   alpha = 0.5
+  ) +
+  geom_line(
+    aes(group = record_id),
+    size = 0.1,
+    alpha = 0.5
+  ) +
+  geom_text(
+    data = hold,
+    aes(label = ttext, x = 2, y = 1),
+    color = "black",
+    size  = 2
+  ) +
+  stat_smooth(
+    # aes(color = assay_taste), 
+    method = "lm", se = FALSE
+  ) + 
+  scale_y_continuous(
+    "FLQ Score"
+  ) +
+  scale_x_continuous(
+    "Time",
+    breaks = c(0, 5),
+    labels = c("Pre", "Post")
+  ) +
+  scale_color_manual(
+    "",
+    values = c("#8c75d2", "#11677e", "#d547ca", "#3e3c8d"),
+    guide = FALSE
+  ) + 
+  facet_wrap(
+    ~ name,
+    ncol = 2
+  ) +
+  theme_classic() +
+  theme(
+    strip.background = element_blank(),
+    # strip.background.y = element_blank(),
+    # strip.text.x  = element_blank(), 
+    strip.text.y  = element_text(angle = 0),
+    axis.line.x   = element_blank(),
+    axis.line.y   = element_line(color = "grey50", size = 0.5),
+    axis.ticks.y  = element_line(color = "grey50", size = 0.1),
+    axis.ticks.x  = element_line(color = "grey50", size = 0.1),
+    axis.text     = element_text(size = 6),
+    axis.title.y  = element_text(size = 8),
+    axis.title.x  = element_text(size = 8),
+    plot.caption  = element_text(size = 6)
+  )
+```
+
+## Food-liking and Adaptation
+
+
 
 
 # References
