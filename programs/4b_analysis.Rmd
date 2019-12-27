@@ -73,6 +73,12 @@ clinical_summary <-
   ) %>%
   left_join(
     demographics, by = "record_id"
+  ) %>%
+  mutate(
+    record_id = as.character(record_id)
+  ) %>%
+  mutate(
+    male = (gender == 1) * 1
   ) 
 
 fvars <- 
@@ -82,9 +88,10 @@ fvars <-
     .funs = list(tab = ~ list(table(.)))
   )
 
+
 clinical_summary %>%
   select_if(is.numeric) %>%
-  tidyr::gather(key = "key", value = "value", -record_id) %>%
+  tidyr::gather(key = "key", value = "value") %>%
   group_by(key) %>%
   summarise(
     mean   = mean(value, na.rm = TRUE),
@@ -103,7 +110,7 @@ clinical_summary %>%
 ```{r supra_table, results = 'asis'}
 supra_analysis %>%
   ungroup %>% 
-  filter(conc > 0) %>%
+  # filter(conc > 0) %>%
   group_by(assay_taste, conc, time) %>%
   summarise(
     x = sprintf("%.1f (%.2f)", mean(response), sd(response))
@@ -216,7 +223,7 @@ supra_fits %>%
   select(
     assay_taste, est_alldays
   ) %>%
-  tidyr::unnest() %>%
+  tidyr::unnest(cols = c(est_alldays)) %>%
   mutate(
     conf_lo = est - qnorm(.9) * se,
     conf_hi = est + qnorm(.9) * se,
@@ -447,6 +454,72 @@ ggplot(
   )
 ```
 
+```{r dtCorrelations}
+baseline_vars <- 
+  clinical_summary %>%
+  select(record_id, bmi, age, male)
+
+hold_thresholds <- 
+  dtrt_thresholds %>%
+  filter(time %in% c(1, 4)) %>%
+  ungroup() %>%
+  select(-taste_order, -days, -dtp, -rtp) %>%
+  tidyr::pivot_longer(cols = c(dt, rt)) %>%
+  group_by(record_id, assay_taste, name) %>%
+  summarise(
+    value = value[time == 4] - value[time == 1]
+  ) %>%
+  mutate(
+    time = 41
+  ) %>%
+  bind_rows(
+    select(ungroup(dtrt_thresholds), -taste_order, -days, -dtp, -rtp) %>%
+  tidyr::pivot_longer(cols = c(dt, rt))
+  )
+
+
+hold_for_cors <-  
+  hold_thresholds %>%
+  filter(time %in% c(1, 41)) %>%
+  left_join(
+    baseline_vars, by = "record_id"
+  )
+
+
+
+hold_for_cors %>%
+  tidyr::pivot_longer(
+    cols = c(age, male, bmi),
+    names_to = "baseline_var",
+    values_to = "baseline_value"
+  ) %>%
+  ungroup() %>%
+  group_nest(
+    time, assay_taste, name, baseline_var
+  ) %>%
+  mutate(
+    cort = purrr::map(
+      .x = data,
+      .f = ~ cor.test(.x$value, .x$baseline_value)),
+    cor_est  = purrr::map_dbl(cort, "estimate"),
+    cor_pval = purrr::map_dbl(cort, "p.value"),
+    value    = sprintf("%.3f (%.2f)", cor_est, cor_pval)
+  ) %>%
+  select(-data, -cort, -cor_est, -cor_pval) %>%
+  tidyr::pivot_wider(
+    id_cols = c(time, assay_taste, name),
+    names_from = baseline_var
+  ) %>%
+  mutate(
+    time = if_else(time == 1, "Baseline",
+                   "Change from baseline to re-feed")
+  ) %>%
+  knitr::kable(
+    caption = "Correlations between baseline covariates and dectection and recognition thresholds."
+  )
+```
+
+
 ## Changes in food-liking 
 
 ```{r}
@@ -454,7 +527,9 @@ flq_completed <-
   foodliking %>%
   filter(complete.cases(.)) %>%
   group_by(record_id) %>%
-  filter(n() == 2) 
+  filter(n() == 2) %>%
+  ungroup() %>%
+  mutate(record_id = as.character(record_id))
 ```
 
 There were `r length(unique(flq_completed$record_id))` subjects who completed the food-liking questionnaire both before and after the exposure time.
@@ -554,7 +629,112 @@ flq_plot %>%
 
 ## Food-liking and Adaptation
 
+```{r flqAdapt}
+dtrt_hold <-
+  dtrt_thresholds %>%
+  ungroup() %>%
+  filter(time %in% c(1, 4), record_id %in% flq_completed$record_id) %>%
+  select(record_id, time, assay_taste, dt, rt) %>%
+  tidyr::pivot_longer(
+    cols = c(dt, rt),
+    names_to = "threshold"
+  ) %>%
+  group_by(record_id, assay_taste, threshold) %>%
+  summarise(
+    dtrt_del = value[time ==4] - value[time == 1]
+  ) %>%
+  ungroup() %>%
+  mutate(
+    threshold = factor(threshold, levels = c("dt", "rt"),
+                       labels = c("Detection", "Recognition")),
+    assay_taste = factor(assay_taste, levels = c("nacl", "sucr"),
+                         labels = c("NaCL", "Sucrose"))
+  )
+  
+flq_hold <-
+  flq_completed %>%
+  ungroup() %>%
+  filter(time %in% c(0, 5)) %>%
+  tidyr::pivot_longer(
+    cols = ends_with("_flq"),
+    names_to = "flq_name"
+  ) %>%
+  group_by(record_id, flq_name) %>%
+  summarise(
+    flq_del = value[time == 5] - value[time == 0]
+  ) %>%
+  mutate(
+    flq_name = stringr::str_remove(flq_name, "_flq"),
+    flq_name = factor(flq_name, levels = c("salt", "sweet", "fatsalt", "fatsweet"),
+                  labels = c("Salt", "Sweet", "Fat & Salt", "Fat & Sweet"))
+  ) 
 
+plot_hold <-
+full_join(
+  dtrt_hold,
+  flq_hold,
+  by = "record_id"
+)
+
+# plot_hold %>%
+#   group_nest(
+#     assay_taste, threshold, flq_name
+#   ) %>%
+#   mutate(
+#     crt = purrr::map(data, ~ cor.test(.x$dtrt_del, .x$flq_del)),
+#     cor_est = purrr::map_dbl(crt, "estimate"),
+#     cor_p   = purrr::map_dbl(crt, "p.value")
+#   ) -> X
+  
+
+ggplot(
+  data = plot_hold,
+  aes(x = dtrt_del, y = flq_del)
+) + 
+  stat_smooth(
+    method = "lm",
+    size = 0.5,
+    se = TRUE
+  ) +
+  geom_point(
+    aes(color = flq_name),
+    alpha = 0.5
+  ) +
+
+  scale_color_manual(
+    "",
+    values = c("#8c75d2", "#11677e", "#d547ca", "#3e3c8d"),
+    guide = FALSE
+  ) + 
+  scale_y_continuous(
+    "Change in food liking score"
+  ) +
+  scale_x_continuous(
+    "Change in threshold"
+  ) +
+  facet_grid(
+     flq_name ~ threshold + assay_taste,
+    scales = "free"
+  ) +   
+  theme_classic() +
+  theme(
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major  = element_line(color = "white"),
+    strip.background = element_blank(),
+    # strip.background.y = element_blank(),
+    # strip.text.x  = element_blank(), 
+    strip.text.y  = element_text(angle = 0),
+    # axis.line.x   = element_blank(),
+    axis.line.x   = element_line(color = "grey50", size = 0.5),
+    axis.line.y   = element_line(color = "grey50", size = 0.5),
+    axis.ticks.y  = element_line(color = "grey50", size = 0.1),
+    axis.ticks.x  = element_line(color = "grey50", size = 0.1),
+    axis.text     = element_text(size = 6),
+    axis.title.y  = element_text(size = 8),
+    axis.title.x  = element_text(size = 8),
+    plot.caption  = element_text(size = 6)
+  )
+```
 
 
 # References
