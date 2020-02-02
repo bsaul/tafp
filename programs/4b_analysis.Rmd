@@ -184,22 +184,68 @@ mest <- function(fitter, data){
     roots     = coef(m))
 }
 
-get_est <- function(fit, conc = c(50, 100, 200)){
-  se <- sqrt(diag(geex::vcov(fit)))
-  # se <- sqrt(diag(fit@corrections$fay))
-  entries <- expand.grid(
-    days = 0:17, 
-    conc = conc)
+get_est <- function(fit, ndays = 17, conc = c(50, 100, 200)){
+
+  entries <- 
+  expand.grid(
+    days = 0:ndays, 
+    conc = conc
+  )
   
-  # Estimates at a given day
-  L <- function(d, c){
+  # Contrast matrix
+  # TODO: This is hardcoded based on the model specification!!
+  make_L <- function(d, c){
     c(1, d, log10(c), d * log10(c))
   }
   
+  L <- t(apply(entries, 1, function(x) { make_L(x[1], x[2]) }))
+  
   cbind(
-    entries, 
-    est = apply(entries, 1, function(x){ coef(fit) %*% L(x[1], x[2])}),
-    se  = sqrt(apply(entries, 1, function(x){ t(L(x[1], x[2])) %*% vcov(fit) %*% L(x[1], x[2])}))
+    entries,
+    est = L %*% coef(fit),
+    se  = sqrt(diag(L %*% vcov(fit) %*% t(L)))
+  )
+}
+
+get_est_diff <- function(fit, ndays = 10, conc = c(50, 100, 200)){
+  
+  # Contrast matrix
+  # TODO: This is hardcoded based on the model specification!!
+  make_L <- function(d, c){
+    c(1, d, log10(c), d * log10(c))
+  }
+  
+  # Use delta method to obtain standard errors:
+  # h(theta) = expm1(X_10 %*% theta) - expm1(X_0 %*% theta)
+  # h'(theta) = 
+  #  ( 
+  #     exp(X_10 %*% theta) - exp(X_0 %*% theta)
+  #     10   * exp(X_10 %*% theta) 
+  #     conc * (exp(X_10 %*% theta) - exp(X_0 %*% theta))
+  #     10   * conc * exp(X_10 %*% theta) 
+  # )
+  theta <- coef(fit)
+  sigma <- vcov(fit)
+  est <- numeric(length(conc))
+  se  <- numeric(length(conc))
+  
+  # Obtaining for each concentration independently; though this could be done
+  # all at once
+  for(i in seq_along(conc)){
+    Ln <- make_L(ndays, conc[i])
+    L0 <- make_L(0, conc[i])
+    
+    J <- (Ln %*% exp(Ln %*% theta)) - (L0 %*% exp(L0 %*% theta))
+    V <- t(J) %*% vcov(fit) %*% J
+    
+    est[i] <- expm1(Ln %*% theta) - expm1(L0 %*% theta)
+    se[i]  <- sqrt(V)
+  }
+  
+  tibble::tibble(
+    conc,
+    est = est,
+    se  = se
   )
 }
 
@@ -207,7 +253,8 @@ supra_model_dt %>%
   mutate(
     fit_alldays = purrr::map(
       .x = data,
-      .f = ~ mest(gee_fit1, .x)),
+      .f = ~ mest(gee_fit1, .x)
+    ),
     est_alldays = purrr::map2(
       .x = fit_alldays, 
       .y = assay_taste,
@@ -216,8 +263,20 @@ supra_model_dt %>%
           get_est(.x, conc = c(100, 200, 400))
         } else {
           get_est(.x)
+        } }
+    ),
+   est_diff_day10 = purrr::map2(
+      .x = fit_alldays, 
+      .y = assay_taste,
+      .f = ~ {
+        if(.y == "sucr") {
+          get_est_diff(.x, ndays = 10, conc = c(100, 200, 400))
+        } else {
+          get_est_diff(.x, ndays = 10)
         } })
-  ) -> supra_fits
+    
+  ) -> 
+  supra_fits
 
 supra_fits %>%
   select(
@@ -233,22 +292,25 @@ supra_fits %>%
   ) -> 
   supra_model_res
 
-
-# TODO: obtain confidence intervals
-supra_changes <- supra_model_res %>%
-  filter(days %in% c(0, 10)) %>%
-  group_by(
-    assay_taste, conc
+supra_changes <- 
+  supra_fits %>%
+  select(
+    assay_taste, est_diff_day10
   ) %>%
-  summarise(
-    diff    = est[2] - est[1]
-  )
+  tidyr::unnest(cols = c(est_diff_day10)) %>%
+  mutate(
+    conf_lo = est - qnorm(.9) * se,
+    conf_hi = est + qnorm(.9) * se,
+    est     = est
+  ) %>%
+  mutate(label = sprintf("%.1f (%.1f, %.1f)", est, conf_lo, conf_hi)) 
 
-supra_nacl_changes <- filter(supra_changes, assay_taste == "nacl") %>% pull(diff)
-supra_sucr_changes <- filter(supra_changes, assay_taste == "sucr") %>% pull(diff)
+
+supra_nacl_changes <- filter(supra_changes, assay_taste == "nacl") %>% pull(label)
+supra_sucr_changes <- filter(supra_changes, assay_taste == "sucr") %>% pull(label)
 ```
 
-Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of increasing response to salt and descreasing response to sweet. For example, the GEE model estimates that after 10 days of fasting the average salt taste response increases by `r supra_nacl_changes%>% round(2) %>% glue::glue_collapse(sep = ", ", last = ", and ")` for the 50, 100, and 200 mg/L concentrations, respectively. Over the same time span, the average sweet taste response is estimated to change by `r supra_sucr_changes %>% round(2) %>% glue::glue_collapse(sep = ", ", last = ", and ")` for each concentration respectively. 
+Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of increasing response to salt and descreasing response to sweet. For example, the GEE model estimates that after 10 days of fasting the average salt taste response increases by `r supra_nacl_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for the 50, 100, and 200 mg/L concentrations, respectively. Over the same time span, the average sweet taste response is estimated to change by `r supra_sucr_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for each concentration respectively. 
 
 
 ```{r supra_days}
@@ -269,22 +331,50 @@ supra_plot <- supra_analysis %>%
 
 conc_labs <- distinct(supra_plot, assay_taste, conc, conc_rank, conc_label)
 
-supra_model_plot <- supra_model_res %>%
-    mutate(
-      assay_taste = factor(
-        assay_taste, 
-         levels = c("nacl", "sucr"),
-         labels = c("NaCL", "Sucrose"))
-    ) %>% 
+supra_model_plot <- 
+  supra_model_res %>%
+  mutate(
+    assay_taste = factor(
+      assay_taste, 
+       levels = c("nacl", "sucr"),
+       labels = c("NaCL", "Sucrose"))
+  ) %>% 
   left_join(
     conc_labs,
     by = c("assay_taste", "conc")
   )
+
+supra_changes_plot <- 
+  supra_changes %>%
+  mutate(
+    assay_taste = factor(
+      assay_taste, 
+       levels = c("nacl", "sucr"),
+       labels = c("NaCL", "Sucrose"))
+  ) %>% 
+  left_join(
+    conc_labs,
+    by = c("assay_taste", "conc")
+  ) %>%
+  left_join(
+    y = supra_model_plot %>% filter(days == 10) %>%
+      select(assay_taste, conc, ypos = est),
+    by = c("assay_taste", "conc")
+  ) %>%
+  left_join(
+    y = supra_model_plot %>% filter(days == 0) %>%
+      select(assay_taste, conc, y0pos = est),
+    by = c("assay_taste", "conc")
+  )
+  
+
 ```
 
 ```{r supra_plot , fig.height = 5, fig.width= 8}
-ggplot(supra_plot, 
-       aes(x = days, y = response)) + 
+ggplot(
+  data  = supra_plot, 
+  mapping = aes(x = days, y = response)
+  ) + 
   geom_hline(
     yintercept = 0, color = "grey50", size = 0.5
   ) +
@@ -306,17 +396,30 @@ ggplot(supra_plot,
     aes(x = days, ymin = conf_lo, ymax = conf_hi, fill = assay_taste),
     alpha = 0.25,
     inherit.aes = FALSE
+  ) +
+  geom_segment(
+    data = supra_changes_plot,
+    aes(x = 0, xend = 10, y = y0pos, yend = y0pos),
+    linetype = "dotted",
+    size = .2, color = "grey20"
+  ) + 
+  geom_segment(
+    data = supra_changes_plot,
+    aes(x = 10, xend = 10, y = ypos, yend = y0pos),
+    linetype = "dotted",
+    size = .2, color = "grey20"
+  ) + 
+  geom_text(
+    data = supra_changes_plot,
+    aes(x = 10, y = ypos, label = label),
+    hjust = 0, vjust = 0, size = 2, color = "grey10"
   ) + 
   geom_text(
     data = conc_labs,
-    aes(x = 10, y = 5, label = conc_label),
+    aes(x = 2, y = 5, label = conc_label),
     hjust = 0, size = 2.5, color = "grey40"
   ) + 
   facet_grid(assay_taste ~ conc_rank) + 
-  # stat_smooth(
-  #   aes(color = assay_taste),
-  #   method = "lm", se = FALSE,
-  #   size = 0.5) +
   scale_y_continuous(
     expand = c(0, 0)
   ) + 
@@ -332,7 +435,7 @@ ggplot(supra_plot,
     title = "Changes in suprathreshold intensity",
     x = "Days since start of fast",
     y = "Response",
-    caption = "Each line is a single subject's trajectory.\nColored lines show GEE model fit with pointwise 90% confidence intervals."
+    caption = "Each line is a single subject's trajectory.\nColored lines show GEE model fit with pointwise 90% confidence intervals.\nValue is estimated average change from Day 0 to 10 with 90% confidence interval."
   ) + 
   theme_classic() +
   theme(
@@ -352,8 +455,6 @@ ggplot(supra_plot,
 ```
 
 ## Changes in Detection/Recognition Thresholds
-
-
 
 
 ```{r dtrt_bytime}
@@ -380,15 +481,6 @@ dtrt_dt <- dtrt_thresholds %>%
   )
 ```
 
-```{r, eval = FALSE}
-library(mixor)
-
-dt <- dtrt_thresholds %>%
-  filter(assay_taste == "sucr")
-test <- mixor(rtp ~ days, id = record_id, data = dt)
-summary(test)
-```
-
 ```{r dtrt_table}
 dtrt_dt %>%
   group_by(assay_taste, time, type) %>%
@@ -405,6 +497,30 @@ dtrt_dt %>%
                   "Start of Fast",
                    "Day 5", "End of fast", "End of fast + 3 days"),
     caption = "Mean (Standard deviation) of thresholds at study timepoints"
+  )
+```
+
+A simple paired t-test between day 0 and end of fast:
+
+```{r dtrt_ttest}
+dtrt_dt %>%
+  ungroup() %>%
+  filter(time %in% c(1, 3)) %>%
+  select(-days, -conc2) %>%
+  group_by(assay_taste, type) %>%
+  tidyr::pivot_wider(
+    names_from = time, 
+    names_prefix = "time",
+    values_from = conc
+  ) %>%
+  tidyr::nest() %>%
+  mutate(
+    p_value = purrr::map_dbl(
+      .x = data,
+      .f = ~ t.test(x = .x[["time1"]], y = .x[["time3"]], paired = TRUE)[["p.value"]])
+  ) %>%
+  select(
+    assay_taste, type, p_value
   )
 ```
 
