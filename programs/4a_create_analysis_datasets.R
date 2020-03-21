@@ -39,7 +39,18 @@ study_subjects <- study_subjects_dtrt
 ## Get demographics from FLQ ####
 demographics <- 
   dt$flq %>%
-  filter(record_id %in% study_subjects, time == 0) %>%
+  # 20200321 - per Toshia M. email:
+  # R005/006 are the same…Male, 36, Standard omnivorous diet
+  # R010/011 are the same…Female, 51, Vegan
+  filter(record_id %in% c(study_subjects, 6, 11), time == 0) %>%
+  filter(!(record_id %in% c(5, 10))) %>%
+  mutate(
+    record_id = case_when(
+      record_id == 6L ~ 5L,
+      record_id == 11L ~ 10L,
+      TRUE ~ record_id
+    )
+  ) %>%
   select(record_id, age = age_flq, gender = gender_flq, diet = diet_flq) %>%
   # TODO: what are the codings?
   mutate(
