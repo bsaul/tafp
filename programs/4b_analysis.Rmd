@@ -1,8 +1,11 @@
 ---
 title: "Analysis of Taste Adaptation Study"
-output: html_document
+output: 
+  bookdown::html_document2:
+    number_sections: false
 editor_options: 
   chunk_output_type: console
+  
 bibliography: 4b_analysis.bib
 ---
 
@@ -104,6 +107,37 @@ clinical_summary %>%
   )
 
 ```
+
+```{r clinical_changes}
+clinical %>%
+  select(
+    record_id, time, height, weight, bmi, 
+    sbp = systolic_blood_pressure, dbp = diastolic_blood_pressure
+  ) %>%
+  tidyr::gather(key = "key", value = "value", -record_id, -time) %>%
+  group_by(time, key) %>%
+  summarise(
+    x = sprintf("%.1f (%.2f)", mean(value, na.rm = TRUE), sd(value, na.rm =  TRUE))
+  ) %>% 
+  tidyr::spread(
+    key = time,
+    value = x
+  )  %>%
+  knitr::kable(
+    align = c("l", rep("c", 4)),
+    col.names = c("Measure",
+                  paste(c("Start of Fast",
+                          "Day 5", "End of fast", "End of fast + 3 days"),
+                        paste0("(n=", counts$n, ")"))),
+    caption = "Mean (Standard deviation) of clinical measures over study"
+  )
+
+```
+
+
+
+
+
 
 ## Changes in Supratheshold Intensity
 
@@ -524,34 +558,215 @@ dtrt_dt %>%
   )
 ```
 
-```{r dtrt_plot, fig.height = 5, fig.width= 8}
+```{r dtrt_model_dt}
+dtrt_model_dt <-
+  dtrt_dt %>%
+  ungroup %>% 
+  mutate(
+    y = log1p(conc),
+  ) %>%
+  select(type, y, days, assay_taste, time, c = conc, id = record_id) %>%
+  arrange(id) %>%
+  group_nest(type, assay_taste) %>%
+  mutate(
+    data_pre_to_5 = purrr::map(data, ~ .x %>% filter(time %in% c(1, 2)) )
+  )
+```
+
+
+```{r dtrt_model}
+geex_correct <- function(data, model){
+  f <- geex::grab_psiFUN(object = model, data = data)
+  function(theta){
+    f(theta)
+  }
+}
+
+gee_fit1 <- function(data){
+  geepack::geeglm(
+    formula = y ~ days,
+    id   = id,
+    data = data, 
+    family = gaussian(link = 'identity'))
+}
+
+mest <- function(fitter, data){
+  m <- fitter(data)
+  m_estimate(
+    data        = data,
+    units       = 'id',
+    estFUN      = geex_correct,
+    outer_args  = list(model = m),
+    corrections = list(fay = correction(
+      FUN = fay_bias_correction,
+      b   = 0.75)),
+    compute_roots  = FALSE,
+    roots     = coef(m))
+}
+
+
+
+get_est <- function(fit, ndays = 17){
+
+  entries <- 
+  expand.grid(
+    days = 0:ndays
+  )
+  
+  # Contrast matrix
+  # TODO: This is hardcoded based on the model specification!!
+  make_L <- function(d, c){
+    c(1, d)
+  }
+  
+  L <- t(apply(entries, 1, function(x) { make_L(x[1], x[2]) }))
+  
+  cbind(
+    entries,
+    est = L %*% coef(fit),
+    se  = sqrt(diag(L %*% vcov(fit) %*% t(L)))
+  )
+}
+
+dtrt_model_dt %>%
+  mutate(
+    fit_alldays = purrr::map(
+      .x = data,
+      .f = ~ mest(gee_fit1, .x)
+    ),
+    est_alldays = purrr::map(
+      .x = fit_alldays, 
+      .f = ~ get_est(.x)
+    )
+  ) -> 
+  dtrt_fits
+
+
+dtrt_fits %>%
+  select(
+    type, assay_taste, est_alldays
+  ) %>%
+  tidyr::unnest(cols = c(est_alldays)) %>%
+  mutate(
+    conf_lo = est - qnorm(.9) * se,
+    conf_hi = est + qnorm(.9) * se,
+    est     = est,
+    conf_lo = conf_lo,
+    conf_hi = conf_hi
+  ) -> 
+  dtrt_model_res
+
+dtrt_changes <- dtrt_model_res %>%
+  filter(days == 10) %>%
+  mutate(label = sprintf("%.1f (%.1f, %.1f)", est, conf_lo, conf_hi)) 
+
+
+dt_nacl_changes <- filter(
+  dtrt_changes, 
+ assay_taste == "NaCL",
+ type == "Detection") %>% pull(label)
+
+rt_nacl_changes <- filter(
+  dtrt_changes, 
+ assay_taste == "NaCL",
+ type == "Recognition") %>% pull(label)
+
+dt_sucr_changes <- filter(
+      dtrt_changes, 
+      assay_taste == "Sucrose",
+      type == "Detection") %>% pull(label)
+
+rt_sucr_changes <- filter(
+      dtrt_changes, 
+      assay_taste == "Sucrose",
+      type == "Recognition") %>% pull(label)
+```
+
+
+```{r dtrt_days}
+dtrt_plot <- dtrt_model_dt %>%
+  select(type, assay_taste, data) %>%
+  tidyr::unnest(cols = data)
+
+dtrt_model_plot <-  dtrt_model_res 
+
+dtrt_changes_plot <- 
+  dtrt_changes %>%
+  left_join(
+    y = dtrt_model_plot %>% filter(days == 10) %>%
+      select(type, assay_taste, ypos = est),
+    by = c("type", "assay_taste")
+  ) %>%
+  left_join(
+    y = dtrt_model_plot %>% filter(days == 0) %>%
+      select(type, assay_taste, y0pos = est),
+    by = c("type", "assay_taste")
+  )
+  
+
+```
+
+```{r dtrt_plot , fig.height = 5, fig.width= 8}
 ggplot(
-  data = dtrt_dt,
-  aes(x = days, y = log10(conc))
-) + 
+  data  = dtrt_plot, 
+  mapping = aes(x = days, y = y)
+  ) + 
   geom_hline(
     yintercept = 0, color = "grey50", size = 0.5
   ) +
+  geom_line(
+    aes(group = id),
+    color = "grey80",
+    size = .3) + 
   geom_point(
     color = "grey80",
-    size = 0.8,
-    position = position_dodge(width = 1)
+    size = 0.3
   ) + 
   geom_line(
-    aes(group = record_id), 
-    color = "grey80",
-    alpha = .5) + 
-  stat_smooth(
-    aes(color = assay_taste), 
-    method = "lm", se = FALSE) + 
+    data = dtrt_model_plot,
+    aes(x = days, y = est, color = assay_taste),
+    inherit.aes = FALSE
+  ) + 
+  geom_ribbon(
+    data = dtrt_model_plot,
+    aes(x = days, ymin = conf_lo, ymax = conf_hi, fill = assay_taste),
+    alpha = 0.25,
+    inherit.aes = FALSE
+  ) +
+  geom_segment(
+    data = dtrt_changes_plot,
+    aes(x = 0, xend = 10, y = y0pos, yend = y0pos),
+    linetype = "dotted",
+    size = .2, color = "grey20"
+  ) + 
+  geom_segment(
+    data = dtrt_changes_plot,
+    aes(x = 10, xend = 10, y = ypos, yend = y0pos),
+    linetype = "dotted",
+    size = .2, color = "grey20"
+  ) + 
+  geom_text(
+    data = dtrt_changes_plot,
+    aes(x = 10, y = ypos, label = label),
+    hjust = 0, vjust = 0, size = 2, color = "grey10"
+  ) + 
+  facet_grid(assay_taste ~ type) + 
+  scale_y_continuous(
+    expand = c(0, 0)
+  ) + 
   scale_color_manual(
     guide = FALSE,
     values = c("#7b4244", "#60e9dc")
   ) +
-  facet_grid(assay_taste ~ type, scales = "free_y") + 
+  scale_fill_manual(
+    guide = FALSE,
+    values = c("#7b4244", "#60e9dc")
+  ) +
   labs(
-    title = "Changes in Detection/Recognition Thresholds",
-    x = "Days since start of fast"
+    title = "Changes in detection/recognition thresholds",
+    x = "Days since start of fast",
+    y = "Threshold (log scale)",
+    caption = "Each line is a single subject's trajectory.\nColored lines show GEE model fit with pointwise 90% confidence intervals.\nValue is estimated average change from Day 0 to 10 with 90% confidence interval."
   ) + 
   theme_classic() +
   theme(
@@ -569,6 +784,7 @@ ggplot(
     plot.caption  = element_text(size = 6)
   )
 ```
+
 
 ```{r dtCorrelations}
 baseline_vars <- 
