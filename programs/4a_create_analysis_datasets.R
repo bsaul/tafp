@@ -92,6 +92,7 @@ dtrt_datetime <-
 ## Suprathreshold Analysis Datasets ####
 supra_analysis <- 
   dt$supra_long_unblind %>%
+  ungroup() %>%
   filter(record_id %in% study_subjects) %>%
   group_by(record_id, time, taste_position, assay_taste) %>%
   arrange(conc) %>%

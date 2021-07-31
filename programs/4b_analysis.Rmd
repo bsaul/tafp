@@ -5,7 +5,6 @@ output:
     number_sections: false
 editor_options: 
   chunk_output_type: console
-  
 bibliography: 4b_analysis.bib
 ---
 
@@ -97,6 +96,7 @@ clinical_summary %>%
   tidyr::gather(key = "key", value = "value") %>%
   group_by(key) %>%
   summarise(
+    count  = sum(value, na.rm = TRUE),
     mean   = mean(value, na.rm = TRUE),
     median = median(value, na.rm = TRUE),
     sd     = sd(value, na.rm = TRUE),
@@ -104,6 +104,25 @@ clinical_summary %>%
   ) %>%
   knitr::kable(
     digits = 2
+  )
+
+```
+
+```{r fast_length_summary}
+clinical_summary %>%
+  filter(fast_length >= 10) %>%
+  select_if(is.numeric) %>%
+  tidyr::gather(key = "key", value = "value") %>%
+  group_by(key) %>%
+  summarise(
+    count  = sum(value, na.rm = TRUE),
+    mean   = mean(value, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    sd     = sd(value, na.rm = TRUE),
+    iqr    = IQR(value, na.rm = TRUE)
+  ) %>%
+  knitr::kable(
+    digits = 2,
   )
 
 ```
@@ -135,6 +154,43 @@ clinical %>%
 ```
 
 
+```{r clinical_changes_conpleters}
+counts2 <- 
+  supra_analysis %>%
+  ungroup() %>%
+  distinct(record_id, time) %>%
+  group_by(record_id) %>%
+  filter(sum(time == 3) > 0) %>%
+  ungroup() %>%
+  group_by(time) %>%
+  count()
+
+clinical %>%
+  select(
+    record_id, time, height, weight, bmi, 
+    sbp = systolic_blood_pressure, dbp = diastolic_blood_pressure
+  ) %>%
+  group_by(record_id) %>%
+  filter(sum(time == 3) > 0) %>%
+  filter(!is.na(height[time == 3])) %>% 
+  tidyr::gather(key = "key", value = "value", -record_id, -time) %>%
+  group_by(time, key) %>%
+  summarise(
+    x = sprintf("%.1f (%.2f)", mean(value, na.rm = TRUE), sd(value, na.rm =  TRUE))
+  ) %>% 
+  tidyr::spread(
+    key = time,
+    value = x
+  )  %>%
+  knitr::kable(
+    align = c("l", rep("c", 4)),
+    col.names = c("Measure",
+                  paste(c("Start of Fast",
+                          "Day 5", "End of fast", "End of fast + 3 days"),
+                        paste0("(n=", counts2$n, ")"))),
+    caption = "Mean (Standard deviation) of clinical measures over study among those with end of fast record"
+  )
+```
 
 
 
@@ -577,8 +633,17 @@ dtrt_model_dt <-
 ```{r dtrt_model}
 geex_correct <- function(data, model){
   f <- geex::grab_psiFUN(object = model, data = data)
+  
+  L <- matrix(
+    c(rep(1, 20), 0:19), ncol = 2
+  )
   function(theta){
-    f(theta)
+    # browser()
+    m <- f(theta[1:2])
+    c(m,  # GEE model
+      expm1(L %*% theta[1:2]) - theta[-c(1:2, 23)], # estimate for days 0:19
+      theta[23] - (theta[13] - theta[3]) # difference between day 10 and day 0
+      )
   }
 }
 
@@ -600,31 +665,39 @@ mest <- function(fitter, data){
     corrections = list(fay = correction(
       FUN = fay_bias_correction,
       b   = 0.75)),
-    compute_roots  = FALSE,
-    roots     = coef(m))
+    compute_roots  = TRUE,
+    root_control = setup_root_control(start =  c(coef(m), rep(3, 20), 0))
+    # roots     = c(coef(m), rep(3, 20))
+    )
 }
 
+# get_est <- function(fit, ndays = 17){
+# 
+#   entries <- 
+#   expand.grid(
+#     days = 0:ndays
+#   )
+#   
+#   # Contrast matrix
+#   # TODO: This is hardcoded based on the model specification!!
+#   make_L <- function(d, c){
+#     c(1, d)
+#   }
+#   
+#   L <- t(apply(entries, 1, function(x) { make_L(x[1], x[2]) }))
+#   
+#   cbind(
+#     entries,
+#     est = L %*% coef(fit),
+#     se  = sqrt(diag(L %*% vcov(fit) %*% t(L)))
+#   )
+# }
 
-
-get_est <- function(fit, ndays = 17){
-
-  entries <- 
-  expand.grid(
-    days = 0:ndays
-  )
-  
-  # Contrast matrix
-  # TODO: This is hardcoded based on the model specification!!
-  make_L <- function(d, c){
-    c(1, d)
-  }
-  
-  L <- t(apply(entries, 1, function(x) { make_L(x[1], x[2]) }))
-  
-  cbind(
-    entries,
-    est = L %*% coef(fit),
-    se  = sqrt(diag(L %*% vcov(fit) %*% t(L)))
+get_est <- function(fit){
+  tibble::tibble(
+    days = c(0:19, -10),
+    est = fit@estimates[-c(1,2)],
+    se  = sqrt(diag(vcov(fit)))[-c(1,2)]
   )
 }
 
@@ -635,7 +708,7 @@ dtrt_model_dt %>%
       .f = ~ mest(gee_fit1, .x)
     ),
     est_alldays = purrr::map(
-      .x = fit_alldays, 
+      .x = fit_alldays,
       .f = ~ get_est(.x)
     )
   ) -> 
@@ -656,39 +729,65 @@ dtrt_fits %>%
   ) -> 
   dtrt_model_res
 
-dtrt_changes <- dtrt_model_res %>%
-  filter(days == 10) %>%
+dtrt_changes <- 
+  dtrt_model_res %>%
+  filter(days == -10) %>%
+  group_by(type, assay_taste) %>%
   mutate(label = sprintf("%.1f (%.1f, %.1f)", est, conf_lo, conf_hi)) 
+# dtrt_changes <- 
+#   dtrt_model_res %>%
+#   filter(days %in% c(0, 10)) %>%
+#   group_by(type, assay_taste) %>%
+#   summarise(
+#     diff = expm1(est[days == 10]) - expm1(est[days == 0])
+#   )
+
+# dtrt_changes_orig_scale <- dtrt_model_res %>%
+#   filter(days == 10) %>%
+#   mutate(
+#     est = expm1(est)
+#   ) 
 
 
 dt_nacl_changes <- filter(
-  dtrt_changes, 
+  dtrt_changes,
  assay_taste == "NaCL",
  type == "Detection") %>% pull(label)
 
 rt_nacl_changes <- filter(
-  dtrt_changes, 
+  dtrt_changes,
  assay_taste == "NaCL",
  type == "Recognition") %>% pull(label)
 
 dt_sucr_changes <- filter(
-      dtrt_changes, 
+      dtrt_changes,
       assay_taste == "Sucrose",
       type == "Detection") %>% pull(label)
 
 rt_sucr_changes <- filter(
-      dtrt_changes, 
+      dtrt_changes,
       assay_taste == "Sucrose",
       type == "Recognition") %>% pull(label)
+```
+
+```{r dtrt_changes_table}
+dtrt_changes %>%
+  select(type, assay_taste, label) %>%
+  knitr::kable(
+    caption = "Estimated change in threshold from day 0 to day 10 (90% confidence interval)."
+  )
+
 ```
 
 
 ```{r dtrt_days}
 dtrt_plot <- dtrt_model_dt %>%
   select(type, assay_taste, data) %>%
-  tidyr::unnest(cols = data)
+  tidyr::unnest(cols = data) %>%
+  filter(days >= 0)
 
-dtrt_model_plot <-  dtrt_model_res 
+dtrt_model_plot <-  dtrt_model_res %>%
+  filter(days >= 0 )
 
 dtrt_changes_plot <- 
   dtrt_changes %>%
@@ -701,15 +800,18 @@ dtrt_changes_plot <-
     y = dtrt_model_plot %>% filter(days == 0) %>%
       select(type, assay_taste, y0pos = est),
     by = c("type", "assay_taste")
-  )
+  ) %>%
+  mutate(days = 10)
   
 
 ```
 
+Figure `\@ref(fig:dtrt_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of decreasing recognition response for salt and sweet response.
+
 ```{r dtrt_plot , fig.height = 5, fig.width= 8}
 ggplot(
   data  = dtrt_plot, 
-  mapping = aes(x = days, y = y)
+  mapping = aes(x = days, y = expm1(y))
   ) + 
   geom_hline(
     yintercept = 0, color = "grey50", size = 0.5
@@ -750,7 +852,7 @@ ggplot(
     aes(x = 10, y = ypos, label = label),
     hjust = 0, vjust = 0, size = 2, color = "grey10"
   ) + 
-  facet_grid(assay_taste ~ type) + 
+  facet_grid(assay_taste ~ type, scales = "free") + 
   scale_y_continuous(
     expand = c(0, 0)
   ) + 
@@ -765,7 +867,7 @@ ggplot(
   labs(
     title = "Changes in detection/recognition thresholds",
     x = "Days since start of fast",
-    y = "Threshold (log scale)",
+    y = "Threshold (mM)",
     caption = "Each line is a single subject's trajectory.\nColored lines show GEE model fit with pointwise 90% confidence intervals.\nValue is estimated average change from Day 0 to 10 with 90% confidence interval."
   ) + 
   theme_classic() +
@@ -784,6 +886,21 @@ ggplot(
     plot.caption  = element_text(size = 6)
   )
 ```
+
+```{r dtrt_plot2}
+dtrt_dt %>%
+  filter(time %in% c(1, 2)) %>%
+  ggplot(
+    aes(x = factor(days), y = conc, group = record_id)
+  ) + 
+  geom_point(size = 0.2) +
+  geom_line(size = 0.2) + 
+  facet_grid(
+    assay_taste ~ type, scales = "free_y"
+  )
+
+```
+
 
 
 ```{r dtCorrelations}
@@ -862,6 +979,12 @@ flq_completed <-
   filter(n() == 2) %>%
   ungroup() %>%
   mutate(record_id = as.character(record_id))
+
+write.csv(
+  flq_completed,
+  file = "inst/data_export/flq_completed_20190101.csv",
+  row.names = FALSE
+)
 ```
 
 There were `r length(unique(flq_completed$record_id))` subjects who completed the food-liking questionnaire both before and after the exposure time.
