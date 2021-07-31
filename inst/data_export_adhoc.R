@@ -1,4 +1,4 @@
-# Export for Toshia of patients who completed end of fast visit.
+# 20210731 - Export for Toshia of patients who completed end of fast visit.
 source("programs/4a_create_analysis_datasets.R")
 
 supra_analysis %>% 
@@ -10,7 +10,8 @@ supra_analysis %>%
 
 dtrt_analysis %>%
   group_by(record_id) %>% 
-  filter(any(time == 3)) %>%
+  filter(any(time == 3)) %>%distinct(record_id)
   write.csv(
     file = "inst/data_export/dtrt_analysis_completed_endoffast_visit.csv"
   )
+
