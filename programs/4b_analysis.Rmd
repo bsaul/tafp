@@ -63,6 +63,7 @@ fast_length <-
   group_by(record_id) %>%
   summarise(fast_length = max(days) - 3)
 
+
 clinical_summary <- 
   clinical %>%
   filter(time == 1) %>%
@@ -400,7 +401,7 @@ supra_nacl_changes <- filter(supra_changes, assay_taste == "nacl") %>% pull(labe
 supra_sucr_changes <- filter(supra_changes, assay_taste == "sucr") %>% pull(label)
 ```
 
-Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of increasing response to salt and descreasing response to sweet. For example, the GEE model estimates that after 10 days of fasting the average salt taste response increases by `r supra_nacl_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for the 50, 100, and 200 mg/L concentrations, respectively. Over the same time span, the average sweet taste response is estimated to change by `r supra_sucr_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for each concentration respectively. 
+Figure `\@ref(fig:supra_days)` displays changes in suprathreshold intensity for salt and sweet taste during the study period for all subjects along with the estimated GEE model. Responses are highly variable, especially between subjects (Table `\@ref(table1)`), but show a general trend of increasing response to salt and descreasing response to sweet. For example, the GEE model estimates that after 10 days of fasting the average salt taste response increases by `r supra_nacl_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for the 50, 100, and 200 mM concentrations, respectively. Over the same time span, the average sweet taste response is estimated to change by `r supra_sucr_changes %>% glue::glue_collapse(sep = ", ", last = ", and ")` for each concentration respectively. 
 
 
 ```{r supra_days}
@@ -415,7 +416,7 @@ supra_plot <- supra_analysis %>%
     conc_label  = factor(
       conc, 
       levels = sort(unique(conc)),
-      labels = sprintf("%s mg/L", sort(unique(conc))),
+      labels = sprintf("%s mM", sort(unique(conc))),
       ordered = TRUE)
   )
 
@@ -980,11 +981,6 @@ flq_completed <-
   ungroup() %>%
   mutate(record_id = as.character(record_id))
 
-write.csv(
-  flq_completed,
-  file = "inst/data_export/flq_completed_20190101.csv",
-  row.names = FALSE
-)
 ```
 
 There were `r length(unique(flq_completed$record_id))` subjects who completed the food-liking questionnaire both before and after the exposure time.
@@ -1005,7 +1001,8 @@ flq_plot <-
                   labels = c("Salt", "Sweet", "Fat & Salt", "Fat & Sweet"))
   ) 
 
-hold <- flq_plot %>%
+hold <- 
+  flq_plot %>%
   tidyr::pivot_wider(
     id_cols = c("record_id", "name"),
     names_from = "time"
@@ -1015,12 +1012,24 @@ hold <- flq_plot %>%
   mutate(
     ttest = purrr::map(
       .x = data,
-      .f = ~ t.test(.x$`0`, .x$`5`, paired = TRUE)
+      .f = ~ t.test(.x$`5`, .x$`0`, paired = TRUE)
     ),
     tpval = purrr::map_dbl(ttest, "p.value"),
     ttext = sprintf("Paired t-test p-value: %.3f", tpval)
   )
+```
 
+```{r flq_table}
+hold %>%
+  mutate(
+    estimate = purrr::map(ttest, ~ .x$estimate)
+  ) %>% 
+  select(name, estimate) %>%
+  knitr::kable(caption = "Paired Changes in FLQ")
+```
+
+
+```{r flq_plot}
 flq_plot %>%
   ggplot(
     data = .,
@@ -1131,17 +1140,10 @@ full_join(
   by = "record_id"
 )
 
-# plot_hold %>%
-#   group_nest(
-#     assay_taste, threshold, flq_name
-#   ) %>%
-#   mutate(
-#     crt = purrr::map(data, ~ cor.test(.x$dtrt_del, .x$flq_del)),
-#     cor_est = purrr::map_dbl(crt, "estimate"),
-#     cor_p   = purrr::map_dbl(crt, "p.value")
-#   ) -> X
-  
+```
 
+
+```{r flq_adapt_plot }
 ggplot(
   data = plot_hold,
   aes(x = dtrt_del, y = flq_del)
